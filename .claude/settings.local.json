@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(/Users/lperez28/.openharness-venv/bin/python -c \"from google import genai; from google.genai import types; print\\('google-genai OK, version:', genai.__version__\\)\")",
-      "Bash(python3 -c ':*)",
-      "Bash(/Users/lperez28/.openharness-venv/bin/python -c ':*)"
-    ]
-  }
-}
