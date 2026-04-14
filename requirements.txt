@@ -6,6 +6,9 @@ google-genai>=1.0.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 easyocr>=1.7.0
+# torch: pip installs a CUDA build on Linux by default (several GB).
+# CPU/MPS-only users should run instead:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
 torchvision>=0.15.0
 torchaudio>=2.0.0
