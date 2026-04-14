@@ -14,7 +14,6 @@ import os
 import re
 import tempfile
 import logging
-from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -241,7 +240,7 @@ def fetch_post(
                 "Select a browser under 'Browser Session' so InstaSum can "
                 "borrow your existing Instagram session."
             )
-        _log(f"  Retrying with browser session cookies…")
+        _log("  Retrying with browser session cookies…")
         info = _extract_info(url, _build_ydl_opts(cookie_browser=ydl_browser))
 
     # ── Parse the info dict ────────────────────────────────────────────

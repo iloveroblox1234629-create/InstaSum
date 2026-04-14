@@ -3,11 +3,9 @@ GUI layer for InstaSum-Image.
 Built with customtkinter for a modern dark-mode look on Linux/KDE and macOS.
 """
 
-import os
 import shutil
 import threading
 import logging
-import tkinter as tk
 from tkinter import filedialog, messagebox
 from pathlib import Path
 
@@ -147,8 +145,11 @@ class App(ctk.CTk):
         out_frame.grid(row=row, column=0, columnspan=2, sticky="ew", padx=4, pady=(0, 10))
         out_frame.columnconfigure(0, weight=1)
 
-        self.output_dir_entry = ctk.CTkEntry(out_frame, height=36)
+        self.output_dir_entry = ctk.CTkEntry(out_frame, height=36,
+                                              placeholder_text="e.g. ~/vault/Brain")
         self.output_dir_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.output_dir_entry.bind("<FocusOut>", self._on_output_dir_change)
+        self.output_dir_entry.bind("<Return>", self._on_output_dir_change)
         ctk.CTkButton(out_frame, text="Browse…", width=90, height=36,
                       command=self._browse_output_dir).grid(row=0, column=1)
         row += 1
@@ -290,6 +291,11 @@ class App(ctk.CTk):
             return
         save_api_key(provider, key)
         self._log(f"API key for {provider} saved to ~/.config/instasum/config.env")
+
+    def _on_output_dir_change(self, _event=None):
+        path = self.output_dir_entry.get().strip()
+        if path:
+            save_settings({"output_dir": path})
 
     def _browse_output_dir(self):
         chosen = filedialog.askdirectory(title="Select Output Folder")

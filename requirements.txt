@@ -5,3 +5,7 @@ openai>=1.30.0
 google-genai>=1.0.0
 python-dotenv>=1.0.0
 requests>=2.31.0
+easyocr>=1.7.0
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0

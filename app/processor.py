@@ -2,6 +2,7 @@
 AI processing layer for InstaSum-Image.
 Handles multi-stage VLM prompting for OCR + summarization.
 Supports OpenAI (gpt-4o) and Google Gemini (gemini-2.5-flash-lite).
+Local EasyOCR runs first and feeds extracted text into the VLM Stage 1 prompt.
 """
 
 import base64
@@ -12,6 +13,47 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# EasyOCR — hardware-aware reader + extraction helpers
+# ---------------------------------------------------------------------------
+
+def get_optimized_reader():
+    """Return an easyocr.Reader using the best available hardware backend."""
+    import torch
+    import easyocr
+
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+
+    logger.info(f"EasyOCR running on: {device}")
+    return easyocr.Reader(["en", "es"], gpu=(device != "cpu"))
+
+
+def run_easyocr(image_paths: list[str], log_cb: Callable[[str], None]) -> str:
+    """
+    Run EasyOCR on every image and return a formatted string, one block per image.
+    Falls back gracefully if easyocr / torch are not installed.
+    """
+    try:
+        reader = get_optimized_reader()
+    except ImportError:
+        log_cb("  [EasyOCR] Package not found — skipping local OCR pre-pass.")
+        return ""
+
+    blocks: list[str] = []
+    for i, path in enumerate(image_paths, start=1):
+        log_cb(f"  [EasyOCR] Scanning Image {i}…")
+        results = reader.readtext(path, detail=0, paragraph=True)
+        text = "\n".join(results).strip()
+        blocks.append(f"=== Image {i} (local OCR) ===\n{text if text else '(no text detected)'}")
+
+    return "\n\n".join(blocks)
+
 # ---------------------------------------------------------------------------
 # Prompt templates
 # ---------------------------------------------------------------------------
@@ -21,15 +63,32 @@ You will be given one or more images from an Instagram post, plus the post capti
 Your job is to extract all valuable information and produce a clean, structured summary.
 Be precise. Do not hallucinate content that is not present in the images or caption."""
 
-STAGE1_OCR_PROMPT = """Stage 1 — OCR & Raw Extraction
+STAGE1_OCR_PROMPT_BASE = """Stage 1 — OCR & Raw Extraction
 
-Look at every image carefully. Extract ALL text you can see, including:
+{easyocr_section}Look at every image carefully. Extract ALL text you can see, including:
 - Headings, titles, bullet points
 - Body text, callouts, quotes
 - Numbers, statistics, dates
 - Author names, source attributions
 
 Return a structured list of everything visible. Label each image as Image 1, Image 2, etc."""
+
+_EASYOCR_PREAMBLE = """A local OCR pass has already extracted the following raw text from the images.
+Use it as a starting reference, but verify against the images directly — it may contain errors.
+
+{easyocr_text}
+
+---
+
+"""
+
+
+def _build_stage1_prompt(easyocr_text: str) -> str:
+    if easyocr_text.strip():
+        section = _EASYOCR_PREAMBLE.format(easyocr_text=easyocr_text)
+    else:
+        section = ""
+    return STAGE1_OCR_PROMPT_BASE.format(easyocr_section=section)
 
 STAGE2_SYNTHESIS_PROMPT = """Stage 2 — Synthesis & Deduplication
 
@@ -102,10 +161,14 @@ def summarize(
 
     _log(f"Starting AI processing with {provider}…")
 
+    _log("  Running local EasyOCR pre-pass…")
+    easyocr_text = run_easyocr(image_paths, _log)
+    stage1_prompt = _build_stage1_prompt(easyocr_text)
+
     if provider == "openai":
-        return _process_openai(image_paths, caption, api_key, model or "gpt-4o", _log)
+        return _process_openai(image_paths, caption, api_key, model or "gpt-4o", _log, stage1_prompt)
     elif provider == "gemini":
-        return _process_gemini(image_paths, caption, api_key, model or "gemini-2.5-flash-lite", _log)
+        return _process_gemini(image_paths, caption, api_key, model or "gemini-2.5-flash-lite", _log, stage1_prompt)
     else:
         raise ValueError(f"Unknown provider: {provider!r}")
 
@@ -143,6 +206,7 @@ def _process_openai(
     api_key: str,
     model: str,
     log_cb,
+    stage1_prompt: str,
 ) -> SummaryResult:
     from openai import OpenAI
 
@@ -155,7 +219,7 @@ def _process_openai(
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": image_parts + [{"type": "text", "text": STAGE1_OCR_PROMPT}],
+            "content": image_parts + [{"type": "text", "text": stage1_prompt}],
         },
     ]
     ocr_response = client.chat.completions.create(
@@ -173,7 +237,7 @@ def _process_openai(
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": image_parts + [{"type": "text", "text": STAGE1_OCR_PROMPT}],
+            "content": image_parts + [{"type": "text", "text": stage1_prompt}],
         },
         {"role": "assistant", "content": ocr_raw},
         {"role": "user", "content": synthesis_prompt},
@@ -212,6 +276,7 @@ def _process_gemini(
     api_key: str,
     model: str,
     log_cb,
+    stage1_prompt: str,
 ) -> SummaryResult:
     from google import genai
     from google.genai import types
@@ -230,7 +295,7 @@ def _process_gemini(
 
     # --- Stage 1: OCR ---
     log_cb("  Stage 1: OCR extraction…")
-    stage1_user_parts = image_parts + [types.Part.from_text(text=STAGE1_OCR_PROMPT)]
+    stage1_user_parts = image_parts + [types.Part.from_text(text=stage1_prompt)]
 
     ocr_response = client.models.generate_content(
         model=model,

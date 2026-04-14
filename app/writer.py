@@ -24,7 +24,7 @@ def write_note(
 
     Returns the path to the written file.
     """
-    out_path = Path(output_dir)
+    out_path = Path(output_dir).expanduser()
     out_path.mkdir(parents=True, exist_ok=True)
 
     filename = _make_filename(post)
