@@ -20,8 +20,14 @@ logger = logging.getLogger(__name__)
 
 def get_optimized_reader():
     """Return an easyocr.Reader using the best available hardware backend."""
-    import torch
-    import easyocr
+    try:
+        import torch
+    except ImportError:
+        raise ImportError("torch is not installed")
+    try:
+        import easyocr
+    except ImportError:
+        raise ImportError("easyocr is not installed")
 
     if torch.cuda.is_available():
         device = "cuda"
@@ -30,7 +36,7 @@ def get_optimized_reader():
     else:
         device = "cpu"
 
-    logger.info(f"EasyOCR running on: {device}")
+    logger.info("EasyOCR running on: %s", device)
     return easyocr.Reader(["en", "es"], gpu=(device != "cpu"))
 
 
@@ -41,8 +47,8 @@ def run_easyocr(image_paths: list[str], log_cb: Callable[[str], None]) -> str:
     """
     try:
         reader = get_optimized_reader()
-    except ImportError:
-        log_cb("  [EasyOCR] Package not found — skipping local OCR pre-pass.")
+    except (ImportError, Exception) as exc:
+        log_cb(f"  [EasyOCR] Skipping local OCR pre-pass: {exc}")
         return ""
 
     blocks: list[str] = []
@@ -225,7 +231,7 @@ def _process_openai(
     ocr_response = client.chat.completions.create(
         model=model,
         messages=ocr_messages,
-        max_tokens=2000,
+        max_tokens=4096,
     )
     ocr_raw = ocr_response.choices[0].message.content.strip()
     log_cb("  Stage 1 complete.")
@@ -245,7 +251,7 @@ def _process_openai(
     synth_response = client.chat.completions.create(
         model=model,
         messages=synthesis_messages,
-        max_tokens=2000,
+        max_tokens=4096,
     )
     synthesis = synth_response.choices[0].message.content.strip()
     log_cb("  Stage 2 complete.")

@@ -28,8 +28,8 @@ BYOK desktop app that fetches Instagram posts, runs local OCR, and produces stru
 ### macOS (Homebrew)
 
 ```bash
-# 1. System dependencies
-brew install python-tk@3.14   # match your Python version
+# 1. System dependencies — match your Python version (e.g. @3.11, @3.12, @3.13)
+brew install python-tk@$(python3 --version | awk '{print $2}' | cut -d. -f1,2)
 
 # 2. Clone
 git clone https://github.com/your-username/InstaSum-Image.git

@@ -12,6 +12,7 @@ yt-dlp is used purely as a metadata/URL resolver.
 
 import os
 import re
+import time
 import tempfile
 import logging
 from dataclasses import dataclass, field
@@ -154,7 +155,7 @@ def _resolve_browser(browser_id: str, log_cb) -> str:
     """
     entry = BROWSER_REGISTRY.get(browser_id)
     if entry is None:
-        # Unknown ID — pass as-is and let yt-dlp surface any error
+        log_cb(f"  Warning: unknown browser ID '{browser_id}' — passing directly to yt-dlp.")
         return browser_id
     if not entry.native and entry.note:
         log_cb(f"  Note: {entry.note}")
@@ -232,6 +233,15 @@ def fetch_post(
         else:
             raise
 
+    # ── Soft login wall: Pass 1 succeeded but returned no entries ─────────
+    # Instagram sometimes serves a 200 redirect page instead of raising an
+    # error, so we must also check whether the response contains usable data.
+    if info is not None and not _collect_entries(info) and ydl_browser:
+        display = BROWSER_REGISTRY.get(cookie_browser, None)
+        label = display.label if display else cookie_browser
+        _log(f"  Anonymous fetch returned no images (possible soft login wall). Retrying with {label} cookies…")
+        info = None
+
     # ── Pass 2: browser-cookie session (only if Pass 1 hit a login wall) ──
     if info is None:
         if not ydl_browser:
@@ -302,32 +312,38 @@ def _download_image(entry: dict, dest_dir: str, idx: int, log_cb) -> str | None:
     out_path = os.path.join(dest_dir, f"image_{idx:02d}{ext}")
 
     log_cb(f"  Downloading image {idx + 1}…")
-    try:
-        headers = {
-            # Mimic a regular browser request so CDN servers don't reject us
-            "User-Agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            "Referer": "https://www.instagram.com/",
-        }
-        resp = requests.get(img_url, headers=headers, timeout=30, stream=True)
-        resp.raise_for_status()
+    headers = {
+        # Mimic a regular browser request so CDN servers don't reject us
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://www.instagram.com/",
+    }
+    last_exc: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            resp = requests.get(img_url, headers=headers, timeout=30, stream=True)
+            resp.raise_for_status()
 
-        with open(out_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+            with open(out_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
-        # Verify the file is a valid image before returning it
-        with Image.open(out_path) as im:
-            im.verify()
+            # Verify the file is a valid image before returning it
+            with Image.open(out_path) as im:
+                im.verify()
 
-        return out_path
+            return out_path
 
-    except Exception as exc:
-        log_cb(f"  Warning: could not download image {idx + 1}: {exc}")
-        return None
+        except Exception as exc:
+            last_exc = exc
+            if attempt < 3:
+                time.sleep(2 ** (attempt - 1))  # 1s, 2s back-off
+
+    log_cb(f"  Warning: could not download image {idx + 1} after 3 attempts: {last_exc}")
+    return None
 
 
 def _best_image_url(entry: dict) -> str:

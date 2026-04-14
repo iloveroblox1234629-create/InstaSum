@@ -24,7 +24,7 @@ DEFAULT_SETTINGS = {
 }
 
 # Deprecated Gemini model names → replace with current default on load.
-_DEPRECATED_GEMINI_MODELS = {
+_DEPRECATED_GEMINI_MODELS: set[str] = {
     "gemini-1.5-pro",
     "gemini-1.5-flash",
     "gemini-1.0-pro",
@@ -99,4 +99,8 @@ def save_settings(settings: dict):
     ensure_config_dir()
     existing = load_settings()
     existing.update(settings)
-    CONFIG_JSON_FILE.write_text(json.dumps(existing, indent=2))
+    try:
+        CONFIG_JSON_FILE.write_text(json.dumps(existing, indent=2))
+    except OSError as exc:
+        import logging
+        logging.getLogger(__name__).warning("Could not save settings: %s", exc)

@@ -14,6 +14,13 @@ from .processor import SummaryResult
 logger = logging.getLogger(__name__)
 
 
+def _yaml_str(value: str) -> str:
+    """Return value as a safely double-quoted YAML string (handles quotes, newlines, colons)."""
+    cleaned = value.replace("\r", "").replace("\n", " ")
+    escaped = cleaned.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def write_note(
     post: PostData,
     result: SummaryResult,
@@ -64,8 +71,8 @@ def _render_note(post: PostData, result: SummaryResult) -> str:
     post_type = "carousel" if image_count > 1 else "single"
 
     frontmatter = f"""---
-title: "{post.title.replace('"', "'")}"
-source: "{post.url}"
+title: {_yaml_str(post.title)}
+source: {_yaml_str(post.url)}
 date: {date_iso}
 processed_at: {now_iso}
 provider: {result.provider}

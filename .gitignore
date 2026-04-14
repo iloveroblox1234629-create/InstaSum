@@ -24,8 +24,8 @@ ENV/
 model_storage/
 .EasyOCR/
 
-# InstaSum temp downloads & outputs
-/tmp/
+# InstaSum temp downloads & outputs (project-root tmp folder, not /tmp system dir)
+tmp/
 outputs/
 *.md~
 
