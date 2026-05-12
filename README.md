@@ -1,14 +1,15 @@
-# InstaSum-Image
+# InstaSum-Image CLI
 
-BYOK desktop app that fetches Instagram posts, runs local OCR, and produces structured Markdown summaries via a VLM (OpenAI or Gemini). Bring your own API key — nothing is stored remotely.
+BYOK command-line tool that fetches Instagram posts, runs local OCR, and produces structured Markdown summaries via a VLM (OpenAI or Gemini). Bring your own API key; nothing is stored remotely.
 
 ---
 
 ## Features
 
 - **Two-stage pipeline** — local EasyOCR extracts text first; a VLM cross-references and synthesizes
-- **Carousel support** — handles single posts and multi-image slideshows
+- **Carousel support** — uses gallery-dl for feed posts and carousels, yt-dlp for Reels
 - **Login-wall bypass** — borrows cookies from your browser when a post requires authentication
+- **Batch input** — pass URLs directly or read them from a text file
 - **BYOK** — OpenAI (`gpt-4o`) or Google Gemini (`gemini-2.5-flash-lite`), your key, your cost
 - **Obsidian-ready output** — saves Markdown notes with YAML frontmatter to any folder you choose
 - **Hardware-aware OCR** — auto-selects CUDA → Apple MPS → CPU
@@ -55,16 +56,73 @@ pip install -r requirements.txt
 
 ## Usage
 
+Run one or more URLs directly:
+
 ```bash
 source .venv/bin/activate
-python main.py
+python main.py https://www.instagram.com/p/POST_ID/
+python main.py https://www.instagram.com/reel/REEL_ID/ https://www.instagram.com/p/POST_ID/
 ```
 
-1. Paste an Instagram post URL
-2. Enter your API key (saved locally to `~/.config/instasum/config.env`)
-3. Choose a provider and browser session (optional, for private posts)
-4. Click **Summarize**
-5. Find your Markdown note in the configured output folder (default: `~/Documents/InstaSum`)
+Read URLs from a file:
+
+```bash
+python main.py --url-file urls.txt
+```
+
+`urls.txt` accepts one URL per line. Blank lines and lines starting with `#` are ignored.
+
+Use explicit CLI overrides:
+
+```bash
+python main.py \
+  --provider gemini \
+  --api-key "$GEMINI_API_KEY" \
+  --model gemini-2.5-flash-lite \
+  --output-dir ~/Documents/InstaSum \
+  --browser chrome \
+  https://www.instagram.com/p/POST_ID/
+```
+
+For private posts, either use browser cookies:
+
+```bash
+python main.py --browser safari https://www.instagram.com/p/POST_ID/
+```
+
+or pass Instagram session cookies manually:
+
+```bash
+python main.py \
+  --session-id "$INSTAGRAM_SESSION_ID" \
+  --csrf-token "$INSTAGRAM_CSRF_TOKEN" \
+  https://www.instagram.com/p/POST_ID/
+```
+
+Each successful URL prints the saved Markdown note path. If some URLs fail, the command prints a failure summary and exits nonzero.
+
+### CLI Options
+
+```text
+usage: instasum-image [-h] [--url-file URL_FILE] [--provider {openai,gemini}]
+                      [--api-key API_KEY] [--output-dir OUTPUT_DIR]
+                      [--browser BROWSER] [--session-id SESSION_ID]
+                      [--csrf-token CSRF_TOKEN] [--model MODEL] [--verbose]
+                      [urls ...]
+```
+
+| Option | Description |
+|---|---|
+| `urls` | Instagram post or Reel URLs |
+| `--url-file` | File containing one URL per line |
+| `--provider` | `openai` or `gemini`; defaults to saved settings |
+| `--api-key` | API key override for the selected provider |
+| `--output-dir` | Markdown output directory override |
+| `--browser` | Browser cookie source, such as `chrome`, `firefox`, `safari`, or `none` |
+| `--session-id` | Instagram `sessionid` cookie override |
+| `--csrf-token` | Instagram `csrftoken` cookie override |
+| `--model` | VLM model override |
+| `--verbose` | Enable debug logging and tracebacks for failures |
 
 ---
 
@@ -73,8 +131,8 @@ python main.py
 API keys and settings persist in `~/.config/instasum/`. You can also place a `.env` file in the project root:
 
 ```bash
-cp .env.example .env
-# edit .env and fill in your keys
+OPENAI_API_KEY=...
+GEMINI_API_KEY=...
 ```
 
 | Setting | Default | Description |
@@ -84,6 +142,8 @@ cp .env.example .env
 | `openai_model` | `gpt-4o` | OpenAI model ID |
 | `gemini_model` | `gemini-2.5-flash-lite` | Gemini model ID |
 | `cookie_browser` | _(none)_ | Browser to borrow cookies from |
+| `instagram_session_id` | _(none)_ | Optional Instagram `sessionid` cookie |
+| `instagram_csrf_token` | _(none)_ | Optional Instagram `csrftoken` cookie |
 
 ---
 
@@ -91,15 +151,17 @@ cp .env.example .env
 
 ```
 InstaSum-Image/
-├── main.py              # Entry point
+├── main.py              # CLI entry point
 ├── requirements.txt
-├── .env.example
+├── tests/
+│   └── test_cli.py      # CLI behavior tests
 └── app/
+    ├── cli.py           # argparse CLI and pipeline orchestration
     ├── config.py        # Settings & API key persistence
-    ├── fetcher.py       # yt-dlp metadata + image download
+    ├── fetcher.py       # gallery-dl feed/carousel download + yt-dlp Reels metadata
     ├── processor.py     # EasyOCR + VLM two-stage pipeline
     ├── writer.py        # Markdown / Obsidian note generation
-    └── gui.py           # customtkinter GUI
+    └── gui.py           # Legacy CustomTkinter GUI module, not used by main.py on this branch
 ```
 
 ---

@@ -21,6 +21,11 @@ DEFAULT_SETTINGS = {
     # Empty string = anonymous (no cookies). Options: firefox, chrome,
     # chromium, brave, safari, edge, opera.
     "cookie_browser": "",
+    # Instagram session ID for manual authentication.
+    # Leave empty to use browser cookies instead.
+    "instagram_session_id": "",
+    # Instagram CSRF token (often needed alongside session ID).
+    "instagram_csrf_token": "",
 }
 
 # Deprecated Gemini model names → replace with current default on load.
@@ -104,3 +109,25 @@ def save_settings(settings: dict):
     except OSError as exc:
         import logging
         logging.getLogger(__name__).warning("Could not save settings: %s", exc)
+
+
+def get_instagram_session_id() -> str:
+    """Get the saved Instagram session ID, or empty string if not set."""
+    settings = load_settings()
+    return settings.get("instagram_session_id", "")
+
+
+def save_instagram_session_id(session_id: str):
+    """Save the Instagram session ID to settings."""
+    save_settings({"instagram_session_id": session_id})
+
+
+def get_instagram_csrf_token() -> str:
+    """Get the saved Instagram CSRF token, or empty string if not set."""
+    settings = load_settings()
+    return settings.get("instagram_csrf_token", "")
+
+
+def save_instagram_csrf_token(csrf_token: str):
+    """Save the Instagram CSRF token to settings."""
+    save_settings({"instagram_csrf_token": csrf_token})

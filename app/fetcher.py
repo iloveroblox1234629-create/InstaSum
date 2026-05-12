@@ -6,17 +6,23 @@ Strategy (2026-era Instagram):
   Pass 2 — if Instagram returns a login wall, retry with the user's live
             browser session via yt-dlp's cookiesfrombrowser option.
 
-Images are downloaded ourselves via requests after we have the URLs;
-yt-dlp is used purely as a metadata/URL resolver.
+Reels are resolved with yt-dlp. Feed posts/carousels are downloaded with
+gallery-dl, which handles Instagram sidecar media more reliably.
 """
 
+import json
 import os
 import re
+import shutil
+import subprocess
+import sys
 import time
 import tempfile
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Callable
+from urllib.parse import urlparse
 
 import yt_dlp
 import requests
@@ -37,6 +43,9 @@ _LOGIN_SIGNALS = (
     "age-restricted",
     "this content",      # "This content isn't available"
 )
+
+_GALLERY_DL_TIMEOUT_SECONDS = 180
+_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 
 # ---------------------------------------------------------------------------
 # Browser registry
@@ -152,8 +161,9 @@ def _resolve_browser(browser_id: str, log_cb) -> str:
     """
     Look up browser_id in the registry and return the yt-dlp key to use.
     Logs a note when a community browser is mapped to its parent engine.
+    Accepts both stored browser IDs and GUI display labels.
     """
-    entry = BROWSER_REGISTRY.get(browser_id)
+    entry = _browser_entry_for_id(browser_id)
     if entry is None:
         log_cb(f"  Warning: unknown browser ID '{browser_id}' — passing directly to yt-dlp.")
         return browser_id
@@ -162,27 +172,47 @@ def _resolve_browser(browser_id: str, log_cb) -> str:
     return entry.ydl_key
 
 
-def _build_ydl_opts(cookie_browser: str | None = None) -> dict:
+def _browser_entry_for_id(browser_id: str) -> _BrowserEntry | None:
+    key = browser_id.strip()
+    entry = BROWSER_REGISTRY.get(key) or BROWSER_REGISTRY.get(key.lower())
+    if entry is not None:
+        return entry
+    lowered = key.lower()
+    for candidate in BROWSER_REGISTRY.values():
+        if candidate.label.lower() == lowered:
+            return candidate
+    return None
+
+
+def _build_ydl_opts(cookie_browser: str | None = None, cookie_file: str | None = None) -> dict:
     """
     Build yt-dlp options for pure metadata extraction.
 
     skip_download=True  — we never want yt-dlp to download anything;
                           we pull image bytes ourselves once we have the URLs.
     extract_flat=False  — required to get full child-entry data for carousels.
-    format not set      — irrelevant when skip_download=True; avoids confusing
-                          yt-dlp's format selector on non-video posts.
+    format="best"          — prevents "no video in this post" errors on image-
+                           only posts; yt-dlp still skips the actual download
+                           but needs a format selector to parse the metadata.
+    ignoreerrors=True     — skips unrecoverable entries (e.g. video-only
+                           carousel slides) instead of raising.
 
     cookie_browser is the *resolved* yt-dlp key (already looked up via
     _resolve_browser before this is called).
+    cookie_file is a path to a Netscape-format cookie file (for manual session ID).
     """
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "extract_flat": False,
+        "format": "best",
+        "ignoreerrors": True,
     }
     if cookie_browser:
         opts["cookiesfrombrowser"] = (cookie_browser,)
+    if cookie_file:
+        opts["cookies"] = cookie_file
     return opts
 
 
@@ -196,95 +226,420 @@ def fetch_post(
     url: str,
     log_cb: Callable[[str], None] | None = None,
     cookie_browser: str | None = None,
+    instagram_session_id: str | None = None,
+    instagram_csrf_token: str | None = None,
+) -> PostData:
+    """Fetch an Instagram URL with the downloader best suited to its media type."""
+    if _is_reel_url(url):
+        return _fetch_post_with_yt_dlp(
+            url,
+            log_cb=log_cb,
+            cookie_browser=cookie_browser,
+            instagram_session_id=instagram_session_id,
+            instagram_csrf_token=instagram_csrf_token,
+        )
+    return _fetch_post_with_gallery_dl(
+        url,
+        log_cb=log_cb,
+        cookie_browser=cookie_browser,
+        instagram_session_id=instagram_session_id,
+        instagram_csrf_token=instagram_csrf_token,
+    )
+
+
+def _is_reel_url(url: str) -> bool:
+    """Return True when an Instagram URL targets a Reel."""
+    path_parts = [part for part in urlparse(url).path.lower().split("/") if part]
+    return bool(path_parts and path_parts[0] in {"reel", "reels"})
+
+
+def _fetch_post_with_yt_dlp(
+    url: str,
+    log_cb: Callable[[str], None] | None = None,
+    cookie_browser: str | None = None,
+    instagram_session_id: str | None = None,
+    instagram_csrf_token: str | None = None,
 ) -> PostData:
     """
-    Fetch an Instagram post (single image or carousel).
+    Fetch an Instagram Reel with yt-dlp.
 
     Two-pass extraction:
       1. Try anonymous (no cookies).
-      2. If Instagram returns a login wall, retry with cookie_browser session.
+      2. If Instagram returns a login wall, retry with cookie_browser session
+         or instagram_session_id.
 
     Returns PostData with local temp image paths.
     Caller is responsible for deleting temp_dir when done.
     """
     tmp = tempfile.mkdtemp(prefix="instasum_")
+    keep_tmp = False
 
     def _log(msg: str):
         logger.info(msg)
         if log_cb:
             log_cb(msg)
 
-    # ── Resolve browser ID → yt-dlp key (with fallback mapping + note) ────
-    ydl_browser: str | None = None
-    if cookie_browser:
-        ydl_browser = _resolve_browser(cookie_browser, _log)
-
-    # ── Pass 1: anonymous ──────────────────────────────────────────────
-    _log(f"Fetching metadata (anonymous): {url}")
-    info = None
     try:
-        info = _extract_info(url, _build_ydl_opts(cookie_browser=None))
-    except Exception as exc:
-        if _is_login_error(exc) and ydl_browser:
-            display = BROWSER_REGISTRY.get(cookie_browser, None)
-            label = display.label if display else cookie_browser
-            _log(f"  Login wall detected. Retrying with {label} cookies…")
-            info = None   # fall through to Pass 2
-        else:
-            raise
+        # ── Resolve browser ID → yt-dlp key (with fallback mapping + note) ────
+        ydl_browser: str | None = None
+        if cookie_browser:
+            ydl_browser = _resolve_browser(cookie_browser, _log)
 
-    # ── Soft login wall: Pass 1 succeeded but returned no entries ─────────
-    # Instagram sometimes serves a 200 redirect page instead of raising an
-    # error, so we must also check whether the response contains usable data.
-    if info is not None and not _collect_entries(info) and ydl_browser:
-        display = BROWSER_REGISTRY.get(cookie_browser, None)
-        label = display.label if display else cookie_browser
-        _log(f"  Anonymous fetch returned no images (possible soft login wall). Retrying with {label} cookies…")
+        # ── Build cookie file from session ID if provided ─────────────────────
+        cookie_file: str | None = None
+        if instagram_session_id:
+            cookie_file = _build_cookie_file(instagram_session_id, tmp, instagram_csrf_token)
+
+        # ── Pass 1: anonymous ──────────────────────────────────────────────
+        _log(f"Fetching metadata (anonymous): {url}")
         info = None
+        try:
+            info = _extract_info(url, _build_ydl_opts(cookie_browser=None, cookie_file=None))
+        except Exception as exc:
+            if _is_login_error(exc) and (ydl_browser or cookie_file):
+                if ydl_browser:
+                    display = BROWSER_REGISTRY.get(cookie_browser, None)
+                    label = display.label if display else cookie_browser
+                    _log(f"  Login wall detected. Retrying with {label} cookies…")
+                else:
+                    _log("  Login wall detected. Retrying with session ID…")
+                info = None   # fall through to Pass 2
+            else:
+                raise
 
-    # ── Pass 2: browser-cookie session (only if Pass 1 hit a login wall) ──
-    if info is None:
-        if not ydl_browser:
+        # ── Soft login wall: Pass 1 succeeded but returned no usable images ─────────
+        # Instagram sometimes serves a 200 page with metadata but no image URLs.
+        if info is not None and (ydl_browser or cookie_file):
+            entries = _collect_entries(info)
+            if not entries:
+                display = BROWSER_REGISTRY.get(cookie_browser, None) if cookie_browser else None
+                label = display.label if display else (cookie_browser or "session ID")
+                _log(f"  Anonymous fetch returned no entries (possible soft login wall). Retrying with {label}…")
+                info = None
+            elif not _entries_have_images(entries):
+                display = BROWSER_REGISTRY.get(cookie_browser, None) if cookie_browser else None
+                label = display.label if display else "session ID"
+                _log(f"  Anonymous fetch returned entries with no image URLs (soft login wall). Retrying with {label}…")
+                _log(f"  Debug: entry keys: {list(entries[0].keys())[:15]}")
+                info = None
+
+        # ── Pass 2: browser-cookie session or session ID ───────────────────
+        if info is None:
+            if not ydl_browser and not cookie_file:
+                raise RuntimeError(
+                    "Instagram requires a login to access this post.\n"
+                    "Select a browser under 'Browser Session' or enter your "
+                    "Instagram session ID in Settings."
+                )
+            if cookie_file:
+                _log("  Retrying with Instagram session ID…")
+                try:
+                    info = _extract_info(url, _build_ydl_opts(cookie_browser=None, cookie_file=cookie_file))
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Failed to fetch post with session ID: {exc}\n"
+                        "The session ID may be expired. Try getting a new one."
+                    ) from exc
+            else:
+                _log("  Retrying with browser session cookies…")
+                try:
+                    info = _extract_info(url, _build_ydl_opts(cookie_browser=ydl_browser, cookie_file=None))
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Failed to fetch post with browser cookies: {exc}\n"
+                        "Try manually providing your Instagram session ID in Settings."
+                    ) from exc
+
+            if info is None:
+                raise RuntimeError(
+                    "Failed to fetch post: yt-dlp returned no data.\n"
+                    "The post may be private, deleted, or require authentication."
+                )
+
+        # ── Parse the info dict ────────────────────────────────────────────
+        if info is None:
             raise RuntimeError(
-                "Instagram requires a login to access this post.\n"
-                "Select a browser under 'Browser Session' so InstaSum can "
-                "borrow your existing Instagram session."
+                "Failed to fetch post: No data returned from Instagram.\n"
+                "The post may be private, deleted, or require authentication."
             )
-        _log("  Retrying with browser session cookies…")
-        info = _extract_info(url, _build_ydl_opts(cookie_browser=ydl_browser))
 
-    # ── Parse the info dict ────────────────────────────────────────────
-    entries = _collect_entries(info)
-    _log(f"Found {len(entries)} image(s) in post.")
+        entries = _collect_entries(info)
+        _log(f"Found {len(entries)} image(s) in post.")
 
-    caption     = info.get("description") or info.get("title") or ""
-    title_raw   = info.get("title") or info.get("id") or "post"
-    upload_date = info.get("upload_date") or "00000000"
-    creator     = info.get("uploader") or info.get("channel") or "Unknown"
+        caption     = info.get("description") or info.get("title") or ""
+        title_raw   = info.get("title") or info.get("id") or "post"
+        upload_date = info.get("upload_date") or "00000000"
+        creator     = info.get("uploader") or info.get("channel") or "Unknown"
 
-    # ── Download images locally ────────────────────────────────────────
-    image_paths: list[str] = []
-    for idx, entry in enumerate(entries):
-        img_path = _download_image(entry, tmp, idx, _log)
-        if img_path:
-            image_paths.append(img_path)
+        # ── Download images locally ────────────────────────────────────────
+        image_paths: list[str] = []
+        for idx, entry in enumerate(entries):
+            img_path = _download_image(entry, tmp, idx, _log)
+            if img_path:
+                image_paths.append(img_path)
 
-    if not image_paths:
-        raise RuntimeError(
-            "No images could be downloaded from this post.\n"
-            "The post may be private, age-restricted, or behind a login wall.\n"
-            "Try selecting a browser under 'Browser Session'."
+        # Warn if some images failed to download
+        if len(image_paths) < len(entries):
+            _log(f"  Warning: Only {len(image_paths)}/{len(entries)} images downloaded successfully.")
+
+        if not image_paths:
+            raise RuntimeError(
+                "No images could be downloaded from this post.\n"
+                "The post may be private, age-restricted, or behind a login wall.\n"
+                "Try selecting a browser under 'Browser Session'."
+            )
+
+        keep_tmp = True
+        return PostData(
+            url=url,
+            title=_sanitize_title(title_raw),
+            caption=caption,
+            upload_date=upload_date,
+            creator=creator,
+            image_paths=image_paths,
+            temp_dir=tmp,
         )
+    finally:
+        if not keep_tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
 
-    return PostData(
-        url=url,
-        title=_sanitize_title(title_raw),
-        caption=caption,
-        upload_date=upload_date,
-        creator=creator,
-        image_paths=image_paths,
-        temp_dir=tmp,
+
+# ── gallery-dl feed post / carousel path ───────────────────────────────────
+
+
+def _fetch_post_with_gallery_dl(
+    url: str,
+    log_cb: Callable[[str], None] | None = None,
+    cookie_browser: str | None = None,
+    instagram_session_id: str | None = None,
+    instagram_csrf_token: str | None = None,
+) -> PostData:
+    """
+    Fetch an Instagram feed post/carousel with gallery-dl.
+
+    gallery-dl is used for non-Reel posts because it downloads every sidecar
+    image directly instead of depending on yt-dlp's carousel metadata shape.
+    """
+    tmp = tempfile.mkdtemp(prefix="instasum_")
+    keep_tmp = False
+
+    def _log(msg: str):
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    try:
+        gallery_browser: str | None = None
+        if cookie_browser:
+            gallery_browser = _resolve_gallery_browser(cookie_browser, _log)
+
+        cookie_file: str | None = None
+        if instagram_session_id:
+            cookie_file = _build_cookie_file(instagram_session_id, tmp, instagram_csrf_token)
+
+        _log(f"Fetching carousel/media with gallery-dl: {url}")
+        metadata = _probe_gallery_dl_metadata(url, gallery_browser, cookie_file, _log)
+        _download_with_gallery_dl(url, tmp, gallery_browser, cookie_file, _log)
+
+        image_paths = _collect_gallery_dl_images(tmp, _log)
+        if not image_paths:
+            raise RuntimeError(
+                "No images could be downloaded from this post with gallery-dl.\n"
+                "The post may be private, deleted, video-only, or require authentication."
+            )
+
+        _log(f"Found {len(image_paths)} image(s) in post.")
+        metadata = metadata or {}
+
+        keep_tmp = True
+        return PostData(
+            url=url,
+            title=_sanitize_title(_gallery_title(metadata, url)),
+            caption=_gallery_caption(metadata),
+            upload_date=_gallery_upload_date(metadata),
+            creator=_gallery_creator(metadata),
+            image_paths=image_paths,
+            temp_dir=tmp,
+        )
+    finally:
+        if not keep_tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _resolve_gallery_browser(browser_id: str, log_cb) -> str:
+    entry = _browser_entry_for_id(browser_id)
+    if entry is None:
+        log_cb(f"  Warning: unknown browser ID '{browser_id}' - passing directly to gallery-dl.")
+        return browser_id
+    if not entry.native and entry.note:
+        log_cb(f"  Note: {entry.note}")
+    return entry.ydl_key
+
+
+def _gallery_dl_base_args(
+    cookie_browser: str | None = None,
+    cookie_file: str | None = None,
+) -> list[str]:
+    args = [sys.executable, "-m", "gallery_dl", "--no-input", "--no-colors", "--config-ignore"]
+    if cookie_file:
+        args.extend(["--cookies", cookie_file])
+    elif cookie_browser:
+        args.extend(["--cookies-from-browser", cookie_browser])
+    return args
+
+
+def _gallery_dl_target(url: str) -> str:
+    """Force gallery-dl's Instagram extractor for regular Instagram URLs."""
+    parsed = urlparse(url)
+    if "instagram.com" in parsed.netloc.lower() and not url.startswith("instagram:"):
+        return f"instagram:{url}"
+    return url
+
+
+def _run_gallery_dl(args: list[str], log_cb) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            args,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=_GALLERY_DL_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "gallery-dl is not installed in this Python environment.\n"
+            "Run: pip install -r requirements.txt"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("gallery-dl timed out while fetching this post.") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or exc.stdout or "").strip()
+        if "No module named gallery_dl" in stderr:
+            raise RuntimeError(
+                "gallery-dl is not installed in this Python environment.\n"
+                "Run: pip install -r requirements.txt"
+            ) from exc
+        log_cb(f"  gallery-dl failed: {stderr or exc}")
+        raise RuntimeError(
+            "gallery-dl failed to fetch this post.\n"
+            f"{stderr or exc}"
+        ) from exc
+
+
+def _probe_gallery_dl_metadata(
+    url: str,
+    cookie_browser: str | None,
+    cookie_file: str | None,
+    log_cb,
+) -> dict:
+    args = _gallery_dl_base_args(cookie_browser, cookie_file)
+    args.extend(["--dump-json", "--simulate", _gallery_dl_target(url)])
+    try:
+        result = _run_gallery_dl(args, log_cb)
+    except RuntimeError as exc:
+        _log_metadata_probe_failure(exc, log_cb)
+        return {}
+
+    for line in result.stdout.splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            return item
+    return {}
+
+
+def _log_metadata_probe_failure(exc: RuntimeError, log_cb) -> None:
+    log_cb(f"  Warning: gallery-dl metadata probe failed; continuing with download only. {exc}")
+
+
+def _download_with_gallery_dl(
+    url: str,
+    dest_dir: str,
+    cookie_browser: str | None,
+    cookie_file: str | None,
+    log_cb,
+) -> None:
+    args = _gallery_dl_base_args(cookie_browser, cookie_file)
+    args.extend(["--directory", dest_dir, "--filename", "/O"])
+    args.append(_gallery_dl_target(url))
+    _run_gallery_dl(args, log_cb)
+
+
+def _collect_gallery_dl_images(dest_dir: str, log_cb) -> list[str]:
+    image_paths: list[str] = []
+    for root, _dirs, files in os.walk(dest_dir):
+        for name in sorted(files):
+            path = os.path.join(root, name)
+            if not name.lower().endswith(_IMAGE_EXTENSIONS):
+                continue
+            try:
+                with Image.open(path) as im:
+                    im.verify()
+            except Exception as exc:
+                log_cb(f"  Skipping invalid image {name}: {exc}")
+                continue
+            image_paths.append(path)
+    return image_paths
+
+
+def _gallery_caption(metadata: dict) -> str:
+    return _first_gallery_value(metadata, ("description", "caption", "content", "title"))
+
+
+def _gallery_title(metadata: dict, url: str) -> str:
+    return (
+        _first_gallery_value(metadata, ("shortcode", "code", "id", "title"))
+        or _shortcode_from_url(url)
+        or "post"
     )
+
+
+def _gallery_creator(metadata: dict) -> str:
+    return _first_gallery_value(
+        metadata,
+        ("username", "user", "owner_username", "author", "account", "channel"),
+    ) or "Unknown"
+
+
+def _gallery_upload_date(metadata: dict) -> str:
+    raw = metadata.get("date") or metadata.get("timestamp") or metadata.get("upload_date")
+    if isinstance(raw, datetime):
+        return raw.strftime("%Y%m%d")
+    if isinstance(raw, (int, float)):
+        return datetime.fromtimestamp(raw, tz=timezone.utc).strftime("%Y%m%d")
+    if isinstance(raw, str):
+        digits = re.sub(r"\D", "", raw)
+        if len(digits) >= 8:
+            return digits[:8]
+    return "00000000"
+
+
+def _first_gallery_value(metadata: dict, keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = metadata.get(key)
+        if value is None:
+            continue
+        if isinstance(value, dict):
+            for nested_key in ("username", "name", "full_name", "id"):
+                nested = value.get(nested_key)
+                if nested:
+                    return str(nested)
+            continue
+        if isinstance(value, list):
+            value = " ".join(str(item) for item in value if item)
+        value = str(value).strip()
+        if value:
+            return value
+    return ""
+
+
+def _shortcode_from_url(url: str) -> str:
+    parts = [part for part in urlparse(url).path.split("/") if part]
+    if len(parts) >= 2 and parts[0].lower() in {"p", "tv", "reel", "reels"}:
+        return parts[1]
+    return ""
 
 
 # ── Entry collection ───────────────────────────────────────────────────────
@@ -294,9 +649,27 @@ def _collect_entries(info: dict) -> list[dict]:
     """Return a flat list of media entries (handles single + carousel)."""
     # Carousel / sidecar: yt-dlp exposes child posts under 'entries'
     if info.get("entries"):
-        return [e for e in info["entries"] if e]
-    # Playlist wrapper with no real children → treat as single
+        # Filter out video entries (carousels can have mixed content)
+        filtered = []
+        for e in info["entries"]:
+            if not e:
+                continue
+            # Skip video entries - we only process images
+            if e.get("is_video", False):
+                continue
+            filtered.append(e)
+        # Return filtered list (may be empty if all entries are videos)
+        return filtered
+    # Single post (no entries) → treat as single
     return [info]
+
+
+def _entries_have_images(entries: list[dict]) -> bool:
+    """Check if at least one entry has a usable image URL."""
+    for entry in entries:
+        if _best_image_url(entry):
+            return True
+    return False
 
 
 # ── Image download ─────────────────────────────────────────────────────────
@@ -364,10 +737,13 @@ def _best_image_url(entry: dict) -> str:
         return direct
 
     # 2. Thumbnails list — largest last
-    for thumb in reversed(entry.get("thumbnails") or []):
-        u = thumb.get("url", "")
-        if u and not _is_video_url(u):
-            return u
+    # For carousel entries, thumbnails tend to be more reliable than 'url'
+    thumbnails = entry.get("thumbnails") or []
+    if thumbnails:
+        for thumb in reversed(thumbnails):
+            u = thumb.get("url", "")
+            if u and not _is_video_url(u):
+                return u
 
     # 3. Singular thumbnail key
     thumb_url = entry.get("thumbnail", "")
@@ -388,3 +764,27 @@ def _guess_ext(url: str) -> str:
         if path.endswith(ext):
             return ext
     return ".jpg"
+
+
+def _build_cookie_file(session_id: str, tmp_dir: str, csrf_token: str | None = None) -> str:
+    """
+    Create a Netscape-format cookie file for yt-dlp from Instagram cookies.
+    Returns the path to the temporary cookie file.
+    """
+    import time
+
+    cookie_path = os.path.join(tmp_dir, "instagram_cookies.txt")
+    # Far future expiration (~100 years from now)
+    far_future = str(int(time.time()) + (86400 * 365 * 100))
+
+    lines = ["# Netscape HTTP Cookie File"]
+    # Domain, flag, path, secure, expiration, name, value
+    # No leading dot - yt-dlp handles subdomain matching internally
+    lines.append("instagram.com\tTRUE\t/\tTRUE\t" + far_future + "\tsessionid\t" + session_id)
+
+    if csrf_token:
+        lines.append("instagram.com\tTRUE\t/\tFALSE\t" + far_future + "\tcsrftoken\t" + csrf_token)
+
+    with open(cookie_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return cookie_path

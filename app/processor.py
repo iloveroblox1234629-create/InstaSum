@@ -13,6 +13,9 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
+# Maximum images to process in a single VLM request (carousels can have many)
+MAX_IMAGES_PER_REQUEST = 10
+
 
 # ---------------------------------------------------------------------------
 # EasyOCR — hardware-aware reader + extraction helpers
@@ -71,12 +74,14 @@ Be precise. Do not hallucinate content that is not present in the images or capt
 
 STAGE1_OCR_PROMPT_BASE = """Stage 1 — OCR & Raw Extraction
 
-{easyocr_section}Look at every image carefully. Extract ALL text you can see, including:
+{easyocr_section}Look at every image carefully. This may be a single post or a carousel with multiple images that tell a story together.
+Extract ALL text you can see from each image, including:
 - Headings, titles, bullet points
 - Body text, callouts, quotes
 - Numbers, statistics, dates
 - Author names, source attributions
 
+For carousel posts, note which image each piece of text comes from, as the images may form a sequence.
 Return a structured list of everything visible. Label each image as Image 1, Image 2, etc."""
 
 _EASYOCR_PREAMBLE = """A local OCR pass has already extracted the following raw text from the images.
@@ -102,11 +107,13 @@ You now have:
 - The raw OCR text from each image (above)
 - The post caption: {caption}
 
+This may be a carousel post where multiple images work together as a sequence.
 Cross-reference both sources and:
-1. Remove duplicate information that appears in both the caption and the images.
-2. Identify the main topic or thesis of this post.
-3. List the key insights or takeaways (max 7 bullet points).
-4. Note any actionable advice, frameworks, or named concepts.
+1. Consider how the images work together as a narrative or flow
+2. Remove duplicate information that appears in both the caption and the images.
+3. Identify the main topic or thesis of this post.
+4. List the key insights or takeaways (max 7 bullet points).
+5. Note any actionable advice, frameworks, or named concepts.
 
 Return your synthesis in this exact format:
 
@@ -166,6 +173,12 @@ def summarize(
             log_cb(msg)
 
     _log(f"Starting AI processing with {provider}…")
+
+    # Enforce image limit for VLM context windows
+    if len(image_paths) > MAX_IMAGES_PER_REQUEST:
+        _log(f"  Warning: Large carousel detected ({len(image_paths)} images). "
+              f"Truncating to {MAX_IMAGES_PER_REQUEST} images.")
+        image_paths = image_paths[:MAX_IMAGES_PER_REQUEST]
 
     _log("  Running local EasyOCR pre-pass…")
     easyocr_text = run_easyocr(image_paths, _log)

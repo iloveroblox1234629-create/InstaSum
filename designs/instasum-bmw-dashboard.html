@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InstaSum BMW Dashboard Concept</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #111318;
+      --muted: #5f6775;
+      --hairline: #d9dee8;
+      --panel: #ffffff;
+      --panel-soft: #f5f7fb;
+      --canvas: #edf1f7;
+      --bmw-blue: #0066b1;
+      --bmw-sky: #00a3e0;
+      --bmw-navy: #1c2f5f;
+      --bmw-red: #e22718;
+      --success: #16834f;
+      --warning: #b87500;
+      --shadow: 0 18px 54px rgba(17, 19, 24, 0.12);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(135deg, rgba(0, 102, 177, 0.09), rgba(255, 255, 255, 0) 28%),
+        linear-gradient(315deg, rgba(0, 163, 224, 0.12), rgba(255, 255, 255, 0) 36%),
+        var(--canvas);
+      color: var(--ink);
+    }
+
+    .app-shell {
+      width: min(1440px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      background: rgba(255, 255, 255, 0.68);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      background: #0f1722;
+      color: #f7f9fd;
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .roundel {
+      width: 46px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--bmw-sky) 0 25%, #fff 0 50%, var(--bmw-blue) 0 75%, #fff 0),
+        #fff;
+      border: 4px solid #161b24;
+      box-shadow: 0 0 0 2px #f7f9fd;
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+      line-height: 1.1;
+    }
+
+    .brand span {
+      color: #a9b3c4;
+      font-size: 12px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav button,
+    .icon-button,
+    .primary-action,
+    .secondary-action,
+    .chip {
+      font: inherit;
+      border: 0;
+    }
+
+    .nav button {
+      width: 100%;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border-radius: 8px;
+      background: transparent;
+      color: #b9c2d2;
+      text-align: left;
+    }
+
+    .nav button.active {
+      background: linear-gradient(90deg, var(--bmw-blue), var(--bmw-navy));
+      color: #fff;
+      box-shadow: 0 10px 28px rgba(0, 102, 177, 0.34);
+    }
+
+    .glyph {
+      width: 18px;
+      height: 18px;
+      display: inline-grid;
+      place-items: center;
+      color: inherit;
+      flex: 0 0 auto;
+    }
+
+    .side-status {
+      margin-top: auto;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .status-label {
+      margin: 0 0 10px;
+      color: #a9b3c4;
+      font-size: 12px;
+    }
+
+    .meter {
+      height: 7px;
+      border-radius: 999px;
+      background: #2c3544;
+      overflow: hidden;
+    }
+
+    .meter span {
+      display: block;
+      height: 100%;
+      width: 68%;
+      background: linear-gradient(90deg, var(--bmw-blue), var(--bmw-sky));
+      border-radius: inherit;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 28px;
+      display: grid;
+      gap: 20px;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .title-block h2 {
+      margin: 0 0 6px;
+      font-size: clamp(26px, 3vw, 38px);
+      letter-spacing: 0;
+      line-height: 1;
+    }
+
+    .title-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      height: 34px;
+      border-radius: 999px;
+      padding: 0 13px;
+      background: #e8f5fc;
+      color: var(--bmw-blue);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--panel);
+      border: 1px solid var(--hairline);
+      display: grid;
+      place-items: center;
+      color: var(--bmw-navy);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.65fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(217, 222, 232, 0.9);
+      border-radius: 8px;
+      box-shadow: 0 10px 32px rgba(17, 19, 24, 0.06);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .panel-header h3 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .panel-header span {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .panel-body {
+      padding: 18px;
+    }
+
+    .url-composer {
+      display: grid;
+      gap: 12px;
+    }
+
+    .textarea-shell {
+      min-height: 144px;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      padding: 14px;
+      color: var(--ink);
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .textarea-shell .placeholder {
+      color: #8a93a3;
+    }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .step {
+      border: 1px solid var(--hairline);
+      background: var(--panel-soft);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 92px;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+
+    .step strong {
+      font-size: 13px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .input,
+    .select {
+      height: 44px;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--panel-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--ink);
+      font-size: 14px;
+      min-width: 0;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--panel-soft);
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .segmented button {
+      height: 36px;
+      border-radius: 6px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+    }
+
+    .segmented button.selected {
+      color: #fff;
+      background: var(--bmw-blue);
+      box-shadow: 0 8px 18px rgba(0, 102, 177, 0.25);
+    }
+
+    .primary-action {
+      height: 50px;
+      border-radius: 8px;
+      padding: 0 20px;
+      color: #fff;
+      background: linear-gradient(90deg, var(--bmw-blue), var(--bmw-navy));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 800;
+      box-shadow: 0 14px 32px rgba(0, 102, 177, 0.26);
+    }
+
+    .secondary-action {
+      height: 40px;
+      border-radius: 8px;
+      padding: 0 14px;
+      background: #fff;
+      border: 1px solid var(--hairline);
+      color: var(--bmw-navy);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }
+
+    .activity {
+      display: grid;
+      gap: 10px;
+    }
+
+    .log-row {
+      display: grid;
+      grid-template-columns: 86px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--hairline);
+      font-size: 13px;
+    }
+
+    .log-row:last-child {
+      border-bottom: 0;
+    }
+
+    .time {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .badge {
+      min-width: 68px;
+      height: 24px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 9px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .badge.ok {
+      background: #e8f6ef;
+      color: var(--success);
+    }
+
+    .badge.route {
+      background: #e8f5fc;
+      color: var(--bmw-blue);
+    }
+
+    .badge.warn {
+      background: #fff6df;
+      color: var(--warning);
+    }
+
+    .preview {
+      min-height: 260px;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      background:
+        linear-gradient(130deg, rgba(0, 102, 177, 0.94), rgba(28, 47, 95, 0.96)),
+        var(--bmw-navy);
+      color: #fff;
+    }
+
+    .preview-main {
+      padding: 22px;
+      display: grid;
+      align-content: space-between;
+      gap: 24px;
+    }
+
+    .preview h3 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.05;
+    }
+
+    .preview p {
+      margin: 8px 0 0;
+      color: rgba(255, 255, 255, 0.74);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .thumb {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      background:
+        linear-gradient(140deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.05)),
+        rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .preview-footer {
+      padding: 14px 22px;
+      background: rgba(4, 10, 19, 0.28);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 12px;
+    }
+
+    .settings-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .option-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .option-row strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .option-row span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .toggle {
+      width: 42px;
+      height: 24px;
+      padding: 3px;
+      border-radius: 999px;
+      background: var(--bmw-blue);
+    }
+
+    .toggle span {
+      display: block;
+      width: 18px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #fff;
+      margin-left: auto;
+    }
+
+    @media (max-width: 980px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .workspace,
+      .split,
+      .pipeline {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .main {
+        padding: 18px;
+      }
+
+      .topbar,
+      .panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .log-row {
+        grid-template-columns: 1fr;
+        gap: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="roundel" aria-hidden="true"></div>
+        <div>
+          <h1>InstaSum</h1>
+          <span>Image Intelligence</span>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Primary">
+        <button class="active"><span class="glyph">⌁</span>Extract</button>
+        <button><span class="glyph">▦</span>Library</button>
+        <button><span class="glyph">◐</span>Models</button>
+        <button><span class="glyph">⚙</span>Settings</button>
+      </nav>
+
+      <div class="side-status">
+        <p class="status-label">Session readiness</p>
+        <div class="meter"><span></span></div>
+        <p class="status-label" style="margin: 10px 0 0;">Browser cookies linked</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="title-block">
+          <h2>Extract and summarize Instagram visuals</h2>
+          <p>Clean image capture, local OCR, and VLM synthesis for Obsidian-ready notes.</p>
+        </div>
+        <div class="top-actions">
+          <span class="chip">gallery-dl routing</span>
+          <button class="icon-button" aria-label="Open folder">⌘</button>
+          <button class="icon-button" aria-label="Help">?</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <div class="stack">
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Instagram URLs</h3>
+              <span>Reels use yt-dlp, posts use gallery-dl</span>
+            </div>
+            <div class="panel-body url-composer">
+              <div class="textarea-shell" aria-label="Instagram URL input preview">
+                <div>https://www.instagram.com/p/C7x-gallery/</div>
+                <div>https://www.instagram.com/reel/C8x-motion/</div>
+                <div class="placeholder">Paste one URL per line...</div>
+              </div>
+              <button class="primary-action">Extract and Summarize →</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Pipeline</h3>
+              <span>Current job preview</span>
+            </div>
+            <div class="panel-body">
+              <div class="pipeline">
+                <div class="step">
+                  <strong>Route</strong>
+                  <span>Detect Reel vs carousel and select downloader.</span>
+                </div>
+                <div class="step">
+                  <strong>Capture</strong>
+                  <span>Download verified still images to a temp workspace.</span>
+                </div>
+                <div class="step">
+                  <strong>OCR</strong>
+                  <span>Run local EasyOCR with hardware-aware acceleration.</span>
+                </div>
+                <div class="step">
+                  <strong>Synthesize</strong>
+                  <span>Generate a structured Markdown note with a VLM.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>AI and Output</h3>
+              <span>Saved locally</span>
+            </div>
+            <div class="panel-body stack">
+              <div class="split">
+                <div class="field">
+                  <label>Provider</label>
+                  <div class="segmented">
+                    <button class="selected">OpenAI</button>
+                    <button>Gemini</button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Output Folder</label>
+                  <div class="input">~/Documents/InstaSum <span>Browse</span></div>
+                </div>
+              </div>
+              <div class="split">
+                <div class="field">
+                  <label>API Key</label>
+                  <div class="input">•••••••••••••••• <span>Save</span></div>
+                </div>
+                <div class="field">
+                  <label>Browser Session</label>
+                  <div class="select">Chrome <span>⌄</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Activity Log</h3>
+              <button class="secondary-action">Clear</button>
+            </div>
+            <div class="panel-body activity">
+              <div class="log-row">
+                <span class="time">10:42:15</span>
+                <span>Detected carousel post and selected gallery-dl.</span>
+                <span class="badge route">ROUTED</span>
+              </div>
+              <div class="log-row">
+                <span class="time">10:42:18</span>
+                <span>Downloaded 6 verified images.</span>
+                <span class="badge ok">OK</span>
+              </div>
+              <div class="log-row">
+                <span class="time">10:42:24</span>
+                <span>OCR completed on Apple MPS.</span>
+                <span class="badge ok">OK</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="stack">
+          <section class="panel preview">
+            <div class="preview-main">
+              <div>
+                <h3>Carousel capture ready</h3>
+                <p>Six images queued for OCR and synthesis. Session cookies are available if Instagram requires login.</p>
+              </div>
+              <div class="thumb-grid" aria-label="Image preview tiles">
+                <span class="thumb"></span>
+                <span class="thumb"></span>
+                <span class="thumb"></span>
+                <span class="thumb"></span>
+                <span class="thumb"></span>
+                <span class="thumb"></span>
+              </div>
+            </div>
+            <div class="preview-footer">
+              <div class="metric">
+                <strong>6</strong>
+                <span>images detected</span>
+              </div>
+              <span class="badge ok">READY</span>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Session Controls</h3>
+              <span>Private posts</span>
+            </div>
+            <div class="panel-body settings-list">
+              <div class="option-row">
+                <div>
+                  <strong>Use browser cookies</strong>
+                  <span>Borrow the active Instagram session.</span>
+                </div>
+                <div class="toggle"><span></span></div>
+              </div>
+              <div class="option-row">
+                <div>
+                  <strong>Manual session fallback</strong>
+                  <span>Use saved sessionid and csrftoken.</span>
+                </div>
+                <div class="toggle"><span></span></div>
+              </div>
+              <div class="option-row">
+                <div>
+                  <strong>Temp cleanup</strong>
+                  <span>Delete downloaded media after note generation.</span>
+                </div>
+                <div class="toggle"><span></span></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h3>Downloader Mix</h3>
+              <span>Today</span>
+            </div>
+            <div class="panel-body settings-list">
+              <div class="option-row">
+                <div>
+                  <strong>gallery-dl</strong>
+                  <span>Feed posts and carousel media</span>
+                </div>
+                <span class="badge route">82%</span>
+              </div>
+              <div class="option-row">
+                <div>
+                  <strong>yt-dlp</strong>
+                  <span>Instagram Reels</span>
+                </div>
+                <span class="badge warn">18%</span>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
