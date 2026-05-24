@@ -56,8 +56,16 @@ function renderItem(item) {
   const article = document.createElement("article");
   article.className = "result-card";
 
+  const meta = document.createElement("div");
+  meta.className = "result-meta";
+  const type = document.createElement("span");
+  type.textContent = item.type;
+  const role = document.createElement("span");
+  role.textContent = item.role;
+  meta.append(type, role);
+
   const title = document.createElement("h3");
-  title.textContent = `${item.type.toUpperCase()} · ${item.summary.hook || "Untitled summary"}`;
+  title.textContent = item.summary.hook || "Untitled summary";
 
   const url = document.createElement("a");
   url.href = item.url;
@@ -97,7 +105,7 @@ function renderItem(item) {
   buttonRow.className = "card-actions";
   buttonRow.append(copyButton, downloadButton);
 
-  article.append(title, url, takeaways, tags, buttonRow);
+  article.append(meta, title, url, takeaways, tags, buttonRow);
   return article;
 }
 

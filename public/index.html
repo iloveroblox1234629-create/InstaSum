@@ -4,25 +4,82 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>InstaBrief Web</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <main class="app-shell">
+      <header class="topbar" aria-label="Product navigation">
+        <a class="brand" href="/" aria-label="InstaBrief home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img">
+              <path d="M5 6.5A3.5 3.5 0 0 1 8.5 3h7A3.5 3.5 0 0 1 19 6.5v11a3.5 3.5 0 0 1-3.5 3.5h-7A3.5 3.5 0 0 1 5 17.5v-11Zm4.1 3.3h5.8M9.1 12h5.8m-5.8 2.2h3.2" />
+            </svg>
+          </span>
+          <span>InstaBrief</span>
+        </a>
+        <nav class="nav-links" aria-label="Page sections">
+          <a href="#workspace">Extract</a>
+          <a href="#library">Library</a>
+        </nav>
+        <a class="nav-cta" href="#workspace">Start a summary</a>
+      </header>
+
       <section class="hero">
-        <div>
-          <p class="eyebrow">Instagram Reel extraction workspace</p>
-          <h1>Turn saved Reels into searchable Markdown notes.</h1>
-          <p class="lede">Batch paste Instagram links, add transcript, captions, and on-screen text, then export a structured summary for Notion, Obsidian, or Sheets.</p>
+        <div class="hero-copy">
+          <p class="eyebrow">Premium Reel intelligence workspace</p>
+          <h1>Convert Instagram saves into a research-grade knowledge library.</h1>
+          <p class="lede">Paste Reel and post links, blend captions with transcripts and on-screen text, then export polished Markdown notes built for Notion, Obsidian, and content research.</p>
+          <div class="hero-actions">
+            <a class="primary-link" href="#workspace">Extract a Reel</a>
+            <a class="secondary-link" href="#library">View saved notes</a>
+          </div>
         </div>
-        <div class="metrics" aria-label="Research-backed priorities">
-          <span>Batch links</span>
-          <span>Visual text</span>
-          <span>Markdown export</span>
-        </div>
+        <aside class="hero-card" aria-label="Product snapshot">
+          <div class="snapshot-header">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>Extraction profile</span>
+          </div>
+          <div class="snapshot-metric">
+            <strong>3 inputs</strong>
+            <span>URL, transcript, visual text</span>
+          </div>
+          <div class="snapshot-list">
+            <span>Hook detection</span>
+            <span>Role-aware notes</span>
+            <span>Markdown export</span>
+          </div>
+        </aside>
       </section>
 
-      <section class="workspace" aria-label="Extraction form">
-        <form id="extract-form" class="panel">
+      <section class="workflow" aria-label="Workflow highlights">
+        <article>
+          <span>01</span>
+          <h2>Capture the source</h2>
+          <p>Batch paste public Instagram media URLs and remove share-link noise automatically.</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h2>Add context streams</h2>
+          <p>Fuse caption, transcript, and visual overlay notes so silent or text-heavy Reels stay useful.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h2>Export the asset</h2>
+          <p>Save a searchable result card and download a readable, title-based Markdown note.</p>
+        </article>
+      </section>
+
+      <section id="workspace" class="workspace" aria-label="Extraction workspace">
+        <form id="extract-form" class="panel command-panel">
+          <div class="panel-intro">
+            <p class="eyebrow">Extraction console</p>
+            <h2>Build a structured summary</h2>
+            <p>Designed for content creators, researchers, students, and social teams who need more than a generic TL;DR.</p>
+          </div>
+
           <label>
             Instagram URLs
             <textarea id="rawUrls" name="rawUrls" rows="5" placeholder="Paste Reel, post, or TV links. Multiple links are supported."></textarea>
@@ -65,10 +122,13 @@
           <p id="status" class="status" role="status">Ready.</p>
         </form>
 
-        <aside class="panel results-panel">
+        <aside id="library" class="panel results-panel">
           <div class="panel-heading">
-            <h2>Results</h2>
-            <span id="count">0 saved</span>
+            <div>
+              <p class="eyebrow">Saved library</p>
+              <h2>Research-ready results</h2>
+            </div>
+            <span id="count" class="count-pill">0 saved</span>
           </div>
           <div id="results" class="results empty">No summaries yet.</div>
         </aside>
