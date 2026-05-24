@@ -1,0 +1,11 @@
+{
+  "name": "instabrief-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "npx netlify-cli dev --dir public --functions netlify/functions",
+    "build": "node scripts/build.js"
+  }
+}

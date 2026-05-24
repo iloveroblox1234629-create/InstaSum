@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>InstaBrief Web</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Instagram Reel extraction workspace</p>
+          <h1>Turn saved Reels into searchable Markdown notes.</h1>
+          <p class="lede">Batch paste Instagram links, add transcript, captions, and on-screen text, then export a structured summary for Notion, Obsidian, or Sheets.</p>
+        </div>
+        <div class="metrics" aria-label="Research-backed priorities">
+          <span>Batch links</span>
+          <span>Visual text</span>
+          <span>Markdown export</span>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Extraction form">
+        <form id="extract-form" class="panel">
+          <label>
+            Instagram URLs
+            <textarea id="rawUrls" name="rawUrls" rows="5" placeholder="Paste Reel, post, or TV links. Multiple links are supported."></textarea>
+          </label>
+
+          <div class="field-grid">
+            <label>
+              Summary role
+              <select id="role" name="role">
+                <option value="researcher">Researcher</option>
+                <option value="creator">Creator</option>
+                <option value="marketer">Social media manager</option>
+                <option value="student">Student</option>
+                <option value="casual">Quick TL;DR</option>
+              </select>
+            </label>
+            <label>
+              Search saved notes
+              <input id="search" type="search" placeholder="hook, AI, Notion">
+            </label>
+          </div>
+
+          <label>
+            Caption
+            <textarea id="caption" name="caption" rows="3" placeholder="Paste the Reel caption or post text."></textarea>
+          </label>
+          <label>
+            Transcript
+            <textarea id="transcript" name="transcript" rows="5" placeholder="Paste speech transcript, generated captions, or audio notes."></textarea>
+          </label>
+          <label>
+            On-screen text and visual notes
+            <textarea id="visualText" name="visualText" rows="4" placeholder="Add OCR text, visible steps, scene descriptions, or text overlays."></textarea>
+          </label>
+
+          <div class="actions">
+            <button type="submit">Extract Summary</button>
+            <button type="button" id="copy-all" class="secondary">Copy Markdown</button>
+          </div>
+          <p id="status" class="status" role="status">Ready.</p>
+        </form>
+
+        <aside class="panel results-panel">
+          <div class="panel-heading">
+            <h2>Results</h2>
+            <span id="count">0 saved</span>
+          </div>
+          <div id="results" class="results empty">No summaries yet.</div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
