@@ -31,7 +31,7 @@
         <div class="hero-copy">
           <p class="eyebrow">Premium Reel intelligence workspace</p>
           <h1>Convert Instagram saves into a research-grade knowledge library.</h1>
-          <p class="lede">Paste Reel and post links, blend captions with transcripts and on-screen text, then export polished Markdown notes built for Notion, Obsidian, and content research.</p>
+          <p class="lede">Paste Reel and post links to extract public page metadata automatically. Add captions, transcripts, or on-screen text only when you want richer notes.</p>
           <div class="hero-actions">
             <a class="primary-link" href="#workspace">Extract a Reel</a>
             <a class="secondary-link" href="#library">View saved notes</a>
@@ -44,10 +44,10 @@
           </div>
           <div class="snapshot-metric">
             <strong>3 inputs</strong>
-            <span>URL, transcript, visual text</span>
+            <span>URL extraction, optional context</span>
           </div>
           <div class="snapshot-list">
-            <span>Hook detection</span>
+            <span>Public metadata fetch</span>
             <span>Role-aware notes</span>
             <span>Markdown export</span>
           </div>
@@ -63,7 +63,7 @@
         <article>
           <span>02</span>
           <h2>Add context streams</h2>
-          <p>Fuse caption, transcript, and visual overlay notes so silent or text-heavy Reels stay useful.</p>
+          <p>Pull public page metadata first, then enrich with transcript or visual overlay notes when available.</p>
         </article>
         <article>
           <span>03</span>
@@ -77,7 +77,7 @@
           <div class="panel-intro">
             <p class="eyebrow">Extraction console</p>
             <h2>Build a structured summary</h2>
-            <p>Designed for content creators, researchers, students, and social teams who need more than a generic TL;DR.</p>
+            <p>Paste a public Instagram URL and let the app extract available title, caption, and preview metadata. Optional fields improve the summary when Instagram exposes limited data.</p>
           </div>
 
           <label>
@@ -103,16 +103,16 @@
           </div>
 
           <label>
-            Caption
-            <textarea id="caption" name="caption" rows="3" placeholder="Paste the Reel caption or post text."></textarea>
+            Optional caption override
+            <textarea id="caption" name="caption" rows="3" placeholder="Optional: add or correct caption text when Instagram metadata is incomplete."></textarea>
           </label>
           <label>
-            Transcript
-            <textarea id="transcript" name="transcript" rows="5" placeholder="Paste speech transcript, generated captions, or audio notes."></textarea>
+            Optional transcript
+            <textarea id="transcript" name="transcript" rows="5" placeholder="Optional: add speech transcript, generated captions, or audio notes."></textarea>
           </label>
           <label>
-            On-screen text and visual notes
-            <textarea id="visualText" name="visualText" rows="4" placeholder="Add OCR text, visible steps, scene descriptions, or text overlays."></textarea>
+            Optional on-screen text and visual notes
+            <textarea id="visualText" name="visualText" rows="4" placeholder="Optional: add OCR text, visible steps, scene descriptions, or text overlays."></textarea>
           </label>
 
           <div class="actions">

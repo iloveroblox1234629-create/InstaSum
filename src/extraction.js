@@ -88,7 +88,7 @@ export function summarizeInputs({ role = "researcher", caption = "", transcript 
   };
 }
 
-export function buildMarkdown({ url, type, role, summary, tags }) {
+export function buildMarkdown({ url, type, role, summary, tags, extraction }) {
   const titleType = type === "reel" ? "Reel" : type === "post" ? "Post" : "Video";
   return [
     `# Instagram ${titleType} Summary`,
@@ -97,6 +97,8 @@ export function buildMarkdown({ url, type, role, summary, tags }) {
     `- Type: ${type}`,
     `- Role: ${role}`,
     `- Tags: ${tags.join(", ") || "untagged"}`,
+    extraction?.ok ? `- Extracted Title: ${extraction.title || "Untitled"}` : "",
+    extraction && !extraction.ok ? `- Extraction Status: ${extraction.error}` : "",
     "",
     "## Hook",
     summary.hook || "No hook detected yet.",
@@ -110,9 +112,12 @@ export function buildMarkdown({ url, type, role, summary, tags }) {
     "## Actions",
     formatList(summary.actions),
     "",
+    "## Extracted Caption",
+    extraction?.caption || "No extracted caption available.",
+    "",
     "## Creator Notes",
     formatList(summary.creatorNotes)
-  ].join("\n");
+  ].filter((line) => line !== "").join("\n");
 }
 
 export function createMarkdownFilename({ type, summary }) {

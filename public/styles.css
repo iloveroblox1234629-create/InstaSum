@@ -406,6 +406,11 @@ button {
   padding: 12px 16px;
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 button:hover {
   background: var(--primary-dark);
   box-shadow: 0 12px 26px rgba(37, 99, 235, 0.2);
@@ -465,6 +470,15 @@ button:hover {
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
+.result-image {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+}
+
 .result-card:hover {
   border-color: var(--border-strong);
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.09);
@@ -500,6 +514,25 @@ button:hover {
   background: var(--ink);
   color: #fff;
   padding: 5px 9px;
+}
+
+.extraction-note {
+  border-radius: var(--radius);
+  margin: 12px 0;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.extraction-note.success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.extraction-note.warning {
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .card-actions {

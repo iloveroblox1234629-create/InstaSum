@@ -1,30 +1,40 @@
-import { createExtraction } from "/extraction.js";
-
 const form = document.querySelector("#extract-form");
 const statusEl = document.querySelector("#status");
 const resultsEl = document.querySelector("#results");
 const countEl = document.querySelector("#count");
 const searchEl = document.querySelector("#search");
 const copyAllButton = document.querySelector("#copy-all");
+const submitButton = form.querySelector("button[type='submit']");
 const storageKey = "instabrief-web-items";
 
 let savedItems = loadItems();
 render();
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = Object.fromEntries(new FormData(form));
-  const extraction = createExtraction(payload);
 
-  if (!extraction.items.length) {
-    setStatus("No supported Instagram media URLs found.");
-    return;
+  setLoading(true);
+  setStatus("Fetching public Instagram metadata...");
+  try {
+    const extraction = await requestExtraction(payload);
+
+    if (!extraction.items.length) {
+      setStatus("No supported Instagram media URLs found.");
+      return;
+    }
+
+    savedItems = [...extraction.items, ...savedItems].slice(0, 50);
+    saveItems(savedItems);
+    const failures = extraction.items.filter((item) => item.extraction && !item.extraction.ok).length;
+    const suffix = failures ? ` ${failures} URL${failures === 1 ? "" : "s"} need manual review.` : "";
+    setStatus(`Extracted and saved ${extraction.items.length} summary item${extraction.items.length === 1 ? "" : "s"}.${suffix}`);
+    render();
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Extraction failed.");
+  } finally {
+    setLoading(false);
   }
-
-  savedItems = [...extraction.items, ...savedItems].slice(0, 50);
-  saveItems(savedItems);
-  setStatus(`Saved ${extraction.items.length} summary item${extraction.items.length === 1 ? "" : "s"}.`);
-  render();
 });
 
 searchEl.addEventListener("input", render);
@@ -62,7 +72,9 @@ function renderItem(item) {
   type.textContent = item.type;
   const role = document.createElement("span");
   role.textContent = item.role;
-  meta.append(type, role);
+  const source = document.createElement("span");
+  source.textContent = item.extraction?.ok ? "extracted" : item.extraction ? "needs review" : "manual";
+  meta.append(type, role, source);
 
   const title = document.createElement("h3");
   title.textContent = item.summary.hook || "Untitled summary";
@@ -83,6 +95,18 @@ function renderItem(item) {
   const tags = document.createElement("p");
   tags.className = "tags";
   tags.textContent = item.tags.map((tag) => `#${tag}`).join(" ");
+
+  const extraction = document.createElement("div");
+  extraction.className = item.extraction?.ok ? "extraction-note success" : "extraction-note warning";
+  extraction.textContent = extractionStatus(item);
+
+  if (item.extraction?.image) {
+    const image = document.createElement("img");
+    image.className = "result-image";
+    image.src = item.extraction.image;
+    image.alt = "";
+    article.append(image);
+  }
 
   const copyButton = document.createElement("button");
   copyButton.type = "button";
@@ -105,8 +129,23 @@ function renderItem(item) {
   buttonRow.className = "card-actions";
   buttonRow.append(copyButton, downloadButton);
 
-  article.append(meta, title, url, takeaways, tags, buttonRow);
+  article.append(meta, title, url, extraction, takeaways, tags, buttonRow);
   return article;
+}
+
+async function requestExtraction(payload) {
+  const response = await fetch("/api/extract", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body.error || "Extraction failed.");
+  }
+  return body;
 }
 
 function filteredItems() {
@@ -131,6 +170,23 @@ function saveItems(items) {
 
 function setStatus(message) {
   statusEl.textContent = message;
+}
+
+function setLoading(isLoading) {
+  submitButton.disabled = isLoading;
+  submitButton.textContent = isLoading ? "Extracting..." : "Extract Summary";
+}
+
+function extractionStatus(item) {
+  if (!item.extraction) {
+    return "Built from manual context.";
+  }
+  if (item.extraction.ok) {
+    return item.extraction.caption
+      ? "Caption metadata extracted from the public Instagram page."
+      : "Public Instagram metadata extracted; no caption was exposed.";
+  }
+  return `Extraction issue: ${item.extraction.error}`;
 }
 
 async function copyMarkdown(markdown, successMessage) {
