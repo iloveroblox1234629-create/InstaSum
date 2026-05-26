@@ -3,6 +3,7 @@ import { access, copyFile } from "node:fs/promises";
 const requiredFiles = [
   "public/index.html",
   "public/app.js",
+  "public/client-session.js",
   "public/styles.css",
   "src/extraction.js",
   "netlify/functions/extract.js"

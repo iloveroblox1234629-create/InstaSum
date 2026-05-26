@@ -1,3 +1,5 @@
+import { buildExtractionPayload, clearPrivateAccessFields, syncPrivateAccessFields } from "./client-session.js";
+
 const form = document.querySelector("#extract-form");
 const statusEl = document.querySelector("#status");
 const resultsEl = document.querySelector("#results");
@@ -5,17 +7,20 @@ const countEl = document.querySelector("#count");
 const searchEl = document.querySelector("#search");
 const copyAllButton = document.querySelector("#copy-all");
 const submitButton = form.querySelector("button[type='submit']");
+const privateSessionToggle = document.querySelector("#usePrivateSession");
+const privateTokenFields = [...document.querySelectorAll("#instagramSessionId, #instagramCsrfToken, #instagramUserId")];
 const storageKey = "instabrief-web-items";
 
 let savedItems = loadItems();
+syncPrivateAccessFields(privateSessionToggle, privateTokenFields);
 render();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = Object.fromEntries(new FormData(form));
+  const payload = buildExtractionPayload(new FormData(form), privateSessionToggle.checked);
 
   setLoading(true);
-  setStatus("Fetching public Instagram metadata...");
+  setStatus(privateSessionToggle.checked ? "Fetching Instagram metadata with your request-scoped session..." : "Fetching public Instagram metadata...");
   try {
     const extraction = await requestExtraction(payload);
 
@@ -33,11 +38,15 @@ form.addEventListener("submit", async (event) => {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Extraction failed.");
   } finally {
+    clearPrivateAccessFields(privateSessionToggle, privateTokenFields);
     setLoading(false);
   }
 });
 
 searchEl.addEventListener("input", render);
+privateSessionToggle.addEventListener("change", () => {
+  syncPrivateAccessFields(privateSessionToggle, privateTokenFields);
+});
 
 copyAllButton.addEventListener("click", async () => {
   const markdown = filteredItems().map((item) => item.markdown).join("\n\n---\n\n");

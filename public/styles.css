@@ -393,6 +393,64 @@ select:focus {
   gap: 14px;
 }
 
+.private-access {
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #f8fbff, #eef6ff);
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.toggle-row {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.toggle-row input {
+  width: 22px;
+  min-height: 22px;
+  margin: 3px 0 0;
+  accent-color: var(--primary);
+}
+
+.toggle-row strong,
+.toggle-row small {
+  display: block;
+}
+
+.toggle-row small {
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.security-note {
+  border-left: 4px solid var(--cta);
+  margin-bottom: 14px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.55;
+  padding: 10px 12px;
+}
+
+.private-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.private-fields label {
+  margin-bottom: 0;
+}
+
+.private-fields input:disabled {
+  background: #edf2f7;
+  color: var(--muted);
+}
+
 .actions,
 .panel-heading {
   justify-content: space-between;
@@ -584,7 +642,8 @@ button:hover {
   }
 
   .topbar,
-  .field-grid {
+  .field-grid,
+  .private-fields {
     grid-template-columns: 1fr;
   }
 

@@ -31,7 +31,7 @@
         <div class="hero-copy">
           <p class="eyebrow">Premium Reel intelligence workspace</p>
           <h1>Convert Instagram saves into a research-grade knowledge library.</h1>
-          <p class="lede">Paste Reel and post links to extract public page metadata automatically. Add captions, transcripts, or on-screen text only when you want richer notes.</p>
+          <p class="lede">Paste Reel and post links to extract page metadata automatically. Add a temporary Instagram session only when a login-required source is yours to access.</p>
           <div class="hero-actions">
             <a class="primary-link" href="#workspace">Extract a Reel</a>
             <a class="secondary-link" href="#library">View saved notes</a>
@@ -48,6 +48,7 @@
           </div>
           <div class="snapshot-list">
             <span>Public metadata fetch</span>
+            <span>Optional private session pass</span>
             <span>Role-aware notes</span>
             <span>Markdown export</span>
           </div>
@@ -58,7 +59,7 @@
         <article>
           <span>01</span>
           <h2>Capture the source</h2>
-          <p>Batch paste public Instagram media URLs and remove share-link noise automatically.</p>
+          <p>Batch paste Instagram media URLs, remove share-link noise, and optionally attach a request-scoped session.</p>
         </article>
         <article>
           <span>02</span>
@@ -77,13 +78,38 @@
           <div class="panel-intro">
             <p class="eyebrow">Extraction console</p>
             <h2>Build a structured summary</h2>
-            <p>Paste a public Instagram URL and let the app extract available title, caption, and preview metadata. Optional fields improve the summary when Instagram exposes limited data.</p>
+            <p>Paste Instagram URLs and let the app extract available title, caption, and preview metadata. Optional fields improve the summary when Instagram exposes limited data.</p>
           </div>
 
           <label>
             Instagram URLs
             <textarea id="rawUrls" name="rawUrls" rows="5" placeholder="Paste Reel, post, or TV links. Multiple links are supported."></textarea>
           </label>
+
+          <section class="private-access" aria-labelledby="private-access-title">
+            <label class="toggle-row">
+              <input id="usePrivateSession" name="usePrivateSession" type="checkbox">
+              <span>
+                <strong id="private-access-title">Use my Instagram session for login-required URLs</strong>
+                <small>Optional. Leave this off for public links.</small>
+              </span>
+            </label>
+            <p id="private-access-warning" class="security-note">Session tokens are equivalent to temporary Instagram account access. Use tokens only from your own account, do not paste passwords, and only summarize restricted content you have permission to access. Tokens are sent once to this app's extraction function, used as Instagram request cookies, then cleared from this form. They are not saved to your library.</p>
+            <div class="private-fields" aria-describedby="private-access-warning">
+              <label>
+                sessionid cookie
+                <input id="instagramSessionId" name="instagramSessionId" type="password" autocomplete="off" spellcheck="false" placeholder="Paste sessionid value" disabled>
+              </label>
+              <label>
+                csrftoken cookie
+                <input id="instagramCsrfToken" name="instagramCsrfToken" type="password" autocomplete="off" spellcheck="false" placeholder="Paste csrftoken value" disabled>
+              </label>
+              <label>
+                ds_user_id cookie
+                <input id="instagramUserId" name="instagramUserId" type="password" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Optional user id value" disabled>
+              </label>
+            </div>
+          </section>
 
           <div class="field-grid">
             <label>

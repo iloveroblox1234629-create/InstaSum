@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createExtractionFromUrls, extractInstagramPage } from "../netlify/functions/extract.js";
+import { createExtractionFromUrls, extractInstagramPage, createInstagramHeaders } from "../netlify/functions/extract.js";
 
 const sampleInstagramHtml = `
   <!doctype html>
@@ -46,7 +46,7 @@ describe("extractInstagramPage", () => {
     });
 
     assert.equal(page.ok, false);
-    assert.match(page.error, /HTTP 403/);
+    assert.equal(page.error, "Instagram rejected the supplied session or rate-limited the request.");
   });
 
   it("parses metadata when HTML attributes contain spaces around equals signs", async () => {
@@ -56,6 +56,50 @@ describe("extractInstagramPage", () => {
 
     assert.equal(page.ok, true);
     assert.equal(page.caption, "Whitespace metadata still extracts.");
+  });
+
+  it("passes user-provided Instagram tokens as request cookies", async () => {
+    let observedHeaders = {};
+    const page = await extractInstagramPage("https://www.instagram.com/reel/PRIVATE/", {
+      auth: {
+        sessionId: "session-token",
+        csrfToken: "csrf-token",
+        userId: "12345"
+      },
+      fetchPage: async (_url, options) => {
+        observedHeaders = options.headers;
+        return sampleInstagramHtml;
+      }
+    });
+
+    assert.equal(page.ok, true);
+    assert.match(observedHeaders.cookie, /sessionid=session-token/);
+    assert.match(observedHeaders.cookie, /csrftoken=csrf-token/);
+    assert.match(observedHeaders.cookie, /ds_user_id=12345/);
+    assert.equal(observedHeaders["x-csrftoken"], "csrf-token");
+  });
+});
+
+describe("createInstagramHeaders", () => {
+  it("omits cookie headers when tokens are blank", () => {
+    const headers = createInstagramHeaders({ sessionId: "", csrfToken: "", userId: "" });
+
+    assert.equal(headers.cookie, undefined);
+    assert.equal(headers["x-csrftoken"], undefined);
+  });
+
+  it("preserves opaque cookie token values after validation", () => {
+    const headers = createInstagramHeaders({ sessionId: "token%3Awith/slash", csrfToken: "csrf/value" });
+
+    assert.match(headers.cookie, /sessionid=token%3Awith\/slash/);
+    assert.match(headers.cookie, /csrftoken=csrf\/value/);
+  });
+
+  it("rejects token values that cannot be safely sent as cookie headers", () => {
+    assert.throws(
+      () => createInstagramHeaders({ sessionId: "token;\ninjected=true" }),
+      /unsupported characters/
+    );
   });
 });
 
@@ -72,6 +116,24 @@ describe("createExtractionFromUrls", () => {
     assert.equal(result.items[0].extraction.ok, true);
     assert.match(result.items[0].summary.hook, /retention hook/i);
     assert.match(result.items[0].markdown, /Extracted Caption/);
+  });
+
+  it("forwards private access tokens without storing them in result items", async () => {
+    let cookieHeader = "";
+    const result = await createExtractionFromUrls({
+      rawUrls: "https://www.instagram.com/reel/PRIVATE/",
+      instagramSessionId: "session-token",
+      instagramCsrfToken: "csrf-token",
+      instagramUserId: "12345",
+      fetchPage: async (_url, options) => {
+        cookieHeader = options.headers.cookie;
+        return sampleInstagramHtml;
+      }
+    });
+
+    assert.match(cookieHeader, /sessionid=session-token/);
+    assert.equal(JSON.stringify(result.items).includes("session-token"), false);
+    assert.equal(JSON.stringify(result.items).includes("csrf-token"), false);
   });
 
   it("limits each extraction request to five URLs", async () => {

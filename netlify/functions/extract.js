@@ -22,11 +22,19 @@ export async function createExtractionFromUrls({
   caption = "",
   transcript = "",
   visualText = "",
+  instagramSessionId = "",
+  instagramCsrfToken = "",
+  instagramUserId = "",
   fetchPage = defaultFetchPage
 } = {}) {
   const urls = extractInstagramUrls(rawUrls).slice(0, 5);
+  const auth = {
+    sessionId: instagramSessionId,
+    csrfToken: instagramCsrfToken,
+    userId: instagramUserId
+  };
   const items = await Promise.all(urls.map(async (url) => {
-    const page = await extractInstagramPage(url, { fetchPage });
+    const page = await extractInstagramPage(url, { auth, fetchPage });
     const extractedCaption = page.ok ? page.caption : "";
     const extractedTitle = page.ok ? page.title : "";
     const extractionText = [extractedCaption, caption].filter(Boolean).join("\n");
@@ -60,9 +68,10 @@ export async function createExtractionFromUrls({
   return { items: items.filter(Boolean) };
 }
 
-export async function extractInstagramPage(url, { fetchPage = defaultFetchPage } = {}) {
+export async function extractInstagramPage(url, { auth = {}, fetchPage = defaultFetchPage } = {}) {
   try {
-    const html = await fetchPage(url);
+    const headers = createInstagramHeaders(auth);
+    const html = await fetchPage(url, { headers });
     const title = readMeta(html, "og:title") || readTitle(html);
     const description = readMeta(html, "og:description") || "";
     const image = readMeta(html, "og:image") || "";
@@ -88,20 +97,17 @@ export async function extractInstagramPage(url, { fetchPage = defaultFetchPage }
     return {
       ok: false,
       source: "instagram-page",
-      error: error instanceof Error ? error.message : "Instagram extraction failed."
+      error: sanitizeExtractionError(error)
     };
   }
 }
 
-async function defaultFetchPage(url) {
+async function defaultFetchPage(url, { headers = createInstagramHeaders({}) } = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const page = await fetch(url, {
-      headers: {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; InstaBrief/0.1; +https://kaleidoscopic-flan-89e32b.netlify.app)"
-      },
+      headers,
       signal: controller.signal
     });
     if (!page.ok) {
@@ -111,6 +117,52 @@ async function defaultFetchPage(url) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export function createInstagramHeaders({ sessionId = "", csrfToken = "", userId = "" } = {}) {
+  const headers = {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language": "en-US,en;q=0.9",
+    "user-agent": "Mozilla/5.0 (compatible; InstaBrief/0.1; +https://kaleidoscopic-flan-89e32b.netlify.app)"
+  };
+  const cookies = [
+    cookiePair("sessionid", sessionId),
+    cookiePair("csrftoken", csrfToken),
+    cookiePair("ds_user_id", userId)
+  ].filter(Boolean);
+  if (cookies.length) {
+    headers.cookie = cookies.join("; ");
+  }
+  if (csrfToken.trim()) {
+    headers["x-csrftoken"] = csrfToken.trim();
+  }
+  return headers;
+}
+
+function cookiePair(name, value) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  assertSafeToken(trimmed);
+  return `${name}=${trimmed}`;
+}
+
+function assertSafeToken(value) {
+  if (/[\r\n;]/.test(value)) {
+    throw new Error("Instagram session token contains unsupported characters.");
+  }
+}
+
+function sanitizeExtractionError(error) {
+  const message = error instanceof Error ? error.message : "";
+  if (/HTTP\s+(401|403|429)/i.test(message)) {
+    return "Instagram rejected the supplied session or rate-limited the request.";
+  }
+  if (/unsupported characters/i.test(message)) {
+    return "Instagram session token contains unsupported characters.";
+  }
+  return message || "Instagram extraction failed.";
 }
 
 function readMeta(html, property) {

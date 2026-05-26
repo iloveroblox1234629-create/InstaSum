@@ -55,4 +55,34 @@ describe("extract function", () => {
     assert.equal(body.items[0].extraction.ok, true);
     assert.match(body.items[0].markdown, /Remote caption extracted/);
   });
+
+  it("uses optional Instagram tokens only for outbound fetch headers", async () => {
+    let observedHeaders = {};
+    const response = await handler({
+      httpMethod: "POST",
+      body: JSON.stringify({
+        rawUrls: "https://www.instagram.com/reel/PRIVATE/",
+        instagramSessionId: "session-token",
+        instagramCsrfToken: "csrf-token",
+        instagramUserId: "12345"
+      })
+    }, {
+      fetchPage: async (_url, options) => {
+        observedHeaders = options.headers;
+        return `
+          <meta property="og:title" content="Private Creator on Instagram: &quot;Private hook&quot;">
+          <meta property="og:description" content="Private Creator on May 25, 2026: &quot;Private caption extracted.&quot;">
+        `;
+      }
+    });
+
+    const responseText = response.body;
+    assert.equal(response.statusCode, 200);
+    assert.match(observedHeaders.cookie, /sessionid=session-token/);
+    assert.match(observedHeaders.cookie, /csrftoken=csrf-token/);
+    assert.match(observedHeaders.cookie, /ds_user_id=12345/);
+    assert.equal(observedHeaders["x-csrftoken"], "csrf-token");
+    assert.equal(responseText.includes("session-token"), false);
+    assert.equal(responseText.includes("csrf-token"), false);
+  });
 });
