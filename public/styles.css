@@ -320,6 +320,20 @@ h3 {
   padding-top: 16px;
 }
 
+body[data-view="home"] .workspace {
+  display: none;
+}
+
+body[data-view="extract"] .workspace,
+body[data-view="library"] .workspace {
+  grid-template-columns: minmax(320px, 820px);
+  justify-content: center;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 .panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -407,6 +421,10 @@ select:focus {
   margin-bottom: 12px;
 }
 
+.toggle-row.compact {
+  margin-bottom: 0;
+}
+
 .toggle-row input {
   width: 22px;
   min-height: 22px;
@@ -449,6 +467,14 @@ select:focus {
 .private-fields input:disabled {
   background: #edf2f7;
   color: var(--muted);
+}
+
+.remember-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 14px;
 }
 
 .actions,
@@ -617,7 +643,8 @@ button:hover {
   .topbar,
   .hero,
   .workspace,
-  .workflow {
+  .workflow,
+  .remember-row {
     grid-template-columns: 1fr;
   }
 

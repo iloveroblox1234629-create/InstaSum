@@ -4,6 +4,7 @@ const requiredFiles = [
   "public/index.html",
   "public/app.js",
   "public/client-session.js",
+  "public/routing.js",
   "public/styles.css",
   "src/extraction.js",
   "netlify/functions/extract.js"

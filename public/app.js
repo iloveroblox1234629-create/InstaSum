@@ -1,5 +1,15 @@
-import { buildExtractionPayload, clearPrivateAccessFields, syncPrivateAccessFields } from "./client-session.js";
+import {
+  buildExtractionPayload,
+  clearInstagramSession,
+  clearPrivateAccessFields,
+  fillPrivateAccessFields,
+  readSavedInstagramSession,
+  saveInstagramSession,
+  syncPrivateAccessFields
+} from "./client-session.js";
+import { currentView } from "./routing.js";
 
+const viewEls = [...document.querySelectorAll(".app-view")];
 const form = document.querySelector("#extract-form");
 const statusEl = document.querySelector("#status");
 const resultsEl = document.querySelector("#results");
@@ -9,15 +19,23 @@ const copyAllButton = document.querySelector("#copy-all");
 const submitButton = form.querySelector("button[type='submit']");
 const privateSessionToggle = document.querySelector("#usePrivateSession");
 const privateTokenFields = [...document.querySelectorAll("#instagramSessionId, #instagramCsrfToken, #instagramUserId")];
+const rememberSessionToggle = document.querySelector("#rememberInstagramSession");
+const clearPrivateSessionButton = document.querySelector("#clear-private-session");
 const storageKey = "instabrief-web-items";
 
 let savedItems = loadItems();
-syncPrivateAccessFields(privateSessionToggle, privateTokenFields);
+applyRoute();
+fillPrivateAccessFields(privateSessionToggle, privateTokenFields, readSavedInstagramSession());
+rememberSessionToggle.checked = privateSessionToggle.checked;
+syncRememberSessionControl();
 render();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = buildExtractionPayload(new FormData(form), privateSessionToggle.checked);
+  if (privateSessionToggle.checked && rememberSessionToggle.checked) {
+    saveInstagramSession(payload);
+  }
 
   setLoading(true);
   setStatus(privateSessionToggle.checked ? "Fetching Instagram metadata with your request-scoped session..." : "Fetching public Instagram metadata...");
@@ -38,14 +56,30 @@ form.addEventListener("submit", async (event) => {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Extraction failed.");
   } finally {
-    clearPrivateAccessFields(privateSessionToggle, privateTokenFields);
+    if (rememberSessionToggle.checked) {
+      fillPrivateAccessFields(privateSessionToggle, privateTokenFields, readSavedInstagramSession());
+    } else {
+      clearPrivateAccessFields(privateSessionToggle, privateTokenFields);
+    }
     setLoading(false);
   }
 });
 
+window.addEventListener("popstate", applyRoute);
 searchEl.addEventListener("input", render);
 privateSessionToggle.addEventListener("change", () => {
   syncPrivateAccessFields(privateSessionToggle, privateTokenFields);
+  syncRememberSessionControl();
+  if (!privateSessionToggle.checked && !hasSavedSession()) {
+    rememberSessionToggle.checked = false;
+  }
+});
+
+clearPrivateSessionButton.addEventListener("click", () => {
+  clearInstagramSession();
+  rememberSessionToggle.checked = false;
+  clearPrivateAccessFields(privateSessionToggle, privateTokenFields);
+  setStatus("Saved Instagram cookies cleared from this browser.");
 });
 
 copyAllButton.addEventListener("click", async () => {
@@ -69,6 +103,22 @@ function render() {
 
   resultsEl.className = "results";
   resultsEl.replaceChildren(...items.map(renderItem));
+}
+
+function applyRoute() {
+  const view = currentView({
+    hostname: window.location.hostname,
+    pathname: window.location.pathname
+  });
+  document.body.dataset.view = view;
+  document.title = view === "extract"
+    ? "Extract | InstaBrief Web"
+    : view === "library"
+      ? "Library | InstaBrief Web"
+      : "InstaBrief Web";
+  for (const element of viewEls) {
+    element.hidden = element.dataset.view !== view;
+  }
 }
 
 function renderItem(item) {
@@ -175,6 +225,15 @@ function loadItems() {
 
 function saveItems(items) {
   localStorage.setItem(storageKey, JSON.stringify(items));
+}
+
+function hasSavedSession() {
+  const saved = readSavedInstagramSession();
+  return Boolean(saved.instagramSessionId || saved.instagramCsrfToken || saved.instagramUserId);
+}
+
+function syncRememberSessionControl() {
+  rememberSessionToggle.disabled = !privateSessionToggle.checked;
 }
 
 function setStatus(message) {

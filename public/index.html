@@ -21,20 +21,21 @@
           <span>InstaBrief</span>
         </a>
         <nav class="nav-links" aria-label="Page sections">
-          <a href="#workspace">Extract</a>
-          <a href="#library">Library</a>
+          <a href="/">Home</a>
+          <a href="/extract">Extract</a>
+          <a href="/library">Library</a>
         </nav>
-        <a class="nav-cta" href="#workspace">Start a summary</a>
+        <a class="nav-cta" href="/extract">Start a summary</a>
       </header>
 
-      <section class="hero">
+      <section id="home" class="hero app-view" data-view="home">
         <div class="hero-copy">
-          <p class="eyebrow">Premium Reel intelligence workspace</p>
+          <p class="eyebrow">Instagram research operating system</p>
           <h1>Convert Instagram saves into a research-grade knowledge library.</h1>
-          <p class="lede">Paste Reel and post links to extract page metadata automatically. Add a temporary Instagram session only when a login-required source is yours to access.</p>
+          <p class="lede">Start on the extraction subdomain, keep durable notes in the library subdomain, and optionally keep your own Instagram session cookies on this browser for repeat private-source work.</p>
           <div class="hero-actions">
-            <a class="primary-link" href="#workspace">Extract a Reel</a>
-            <a class="secondary-link" href="#library">View saved notes</a>
+            <a class="primary-link" href="/extract">Open extraction</a>
+            <a class="secondary-link" href="/library">Open library</a>
           </div>
         </div>
         <aside class="hero-card" aria-label="Product snapshot">
@@ -55,7 +56,7 @@
         </aside>
       </section>
 
-      <section class="workflow" aria-label="Workflow highlights">
+      <section class="workflow app-view" data-view="home" aria-label="Workflow highlights">
         <article>
           <span>01</span>
           <h2>Capture the source</h2>
@@ -74,7 +75,7 @@
       </section>
 
       <section id="workspace" class="workspace" aria-label="Extraction workspace">
-        <form id="extract-form" class="panel command-panel">
+        <form id="extract-form" class="panel command-panel app-view" data-view="extract">
           <div class="panel-intro">
             <p class="eyebrow">Extraction console</p>
             <h2>Build a structured summary</h2>
@@ -91,10 +92,10 @@
               <input id="usePrivateSession" name="usePrivateSession" type="checkbox">
               <span>
                 <strong id="private-access-title">Use my Instagram session for login-required URLs</strong>
-                <small>Optional. Leave this off for public links.</small>
+                <small>Optional. Saved only on this browser when remember mode is enabled.</small>
               </span>
             </label>
-            <p id="private-access-warning" class="security-note">Session tokens are equivalent to temporary Instagram account access. Use tokens only from your own account, do not paste passwords, and only summarize restricted content you have permission to access. Tokens are sent once to this app's extraction function, used as Instagram request cookies, then cleared from this form. They are not saved to your library.</p>
+            <p id="private-access-warning" class="security-note">Session tokens are equivalent to temporary Instagram account access. Use tokens only from your own account, do not paste passwords, and only summarize restricted content you have permission to access. When remember mode is enabled, these cookie values are stored in this browser's local storage and persist across visits on this same site origin. They are never saved to summary notes.</p>
             <div class="private-fields" aria-describedby="private-access-warning">
               <label>
                 sessionid cookie
@@ -108,6 +109,16 @@
                 ds_user_id cookie
                 <input id="instagramUserId" name="instagramUserId" type="password" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Optional user id value" disabled>
               </label>
+            </div>
+            <div class="remember-row">
+              <label class="toggle-row compact">
+                <input id="rememberInstagramSession" name="rememberInstagramSession" type="checkbox">
+                <span>
+                  <strong>Remember these cookies on this browser</strong>
+                  <small>Persists across page changes and future visits until cleared.</small>
+                </span>
+              </label>
+              <button type="button" id="clear-private-session" class="secondary small">Clear saved cookies</button>
             </div>
           </section>
 
@@ -148,7 +159,7 @@
           <p id="status" class="status" role="status">Ready.</p>
         </form>
 
-        <aside id="library" class="panel results-panel">
+        <aside id="library" class="panel results-panel app-view" data-view="library">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Saved library</p>
