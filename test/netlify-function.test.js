@@ -11,11 +11,47 @@ describe("extract function", () => {
     assert.deepEqual(JSON.parse(response.body), { error: "Use POST." });
   });
 
+  it("rejects browser requests from a different origin", async () => {
+    const response = await handler({
+      httpMethod: "POST",
+      headers: {
+        host: "kaleidoscopic-flan-89e32b.netlify.app",
+        origin: "https://attacker.example"
+      },
+      body: "{}"
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.deepEqual(JSON.parse(response.body), { error: "Origin not allowed." });
+  });
+
+  it("rejects oversized request bodies", async () => {
+    const response = await handler({
+      httpMethod: "POST",
+      body: JSON.stringify({ caption: "x".repeat(25_000) })
+    });
+
+    assert.equal(response.statusCode, 413);
+    assert.deepEqual(JSON.parse(response.body), { error: "Request is too large." });
+  });
+
   it("rejects invalid JSON payloads", async () => {
     const response = await handler({ httpMethod: "POST", body: "{" });
 
     assert.equal(response.statusCode, 400);
     assert.match(JSON.parse(response.body).error, /JSON|Expected/i);
+  });
+
+  it("rejects invalid payload field types", async () => {
+    const response = await handler({
+      httpMethod: "POST",
+      body: JSON.stringify({
+        rawUrls: ["https://www.instagram.com/reel/ABC/"]
+      })
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.match(JSON.parse(response.body).error, /rawUrls must be text/);
   });
 
   it("returns extraction items for valid POST requests", async () => {
@@ -32,6 +68,8 @@ describe("extract function", () => {
 
     const body = JSON.parse(response.body);
     assert.equal(response.statusCode, 200);
+    assert.equal(response.headers["cache-control"], "no-store");
+    assert.equal(response.headers["x-content-type-options"], "nosniff");
     assert.equal(body.items.length, 1);
     assert.equal(body.items[0].url, "https://www.instagram.com/reel/ABC/");
     assert.match(body.items[0].markdown, /## Hook/);

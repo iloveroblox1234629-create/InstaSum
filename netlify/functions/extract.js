@@ -1,12 +1,29 @@
 import { buildMarkdown, createExtraction, extractInstagramUrls } from "../../src/extraction.js";
 
+const MAX_BODY_BYTES = 24_000;
+const FIELD_LIMITS = {
+  rawUrls: 5_000,
+  caption: 8_000,
+  transcript: 12_000,
+  visualText: 8_000,
+  instagramSessionId: 2_000,
+  instagramCsrfToken: 512,
+  instagramUserId: 128
+};
+
 export async function handler(event, options = {}) {
   if (event.httpMethod !== "POST") {
     return response(405, { error: "Use POST." });
   }
+  if (!isAllowedOrigin(event, options)) {
+    return response(403, { error: "Origin not allowed." });
+  }
+  if (byteLength(event.body || "") > MAX_BODY_BYTES) {
+    return response(413, { error: "Request is too large." });
+  }
 
   try {
-    const payload = JSON.parse(event.body || "{}");
+    const payload = validatePayload(JSON.parse(event.body || "{}"));
     const result = payload.extractRemote === false
       ? createExtraction(payload)
       : await createExtractionFromUrls({ ...payload, ...options });
@@ -76,6 +93,7 @@ export async function extractInstagramPage(url, { auth = {}, fetchPage = default
     const description = readMeta(html, "og:description") || "";
     const image = readMeta(html, "og:image") || "";
     const caption = cleanInstagramCaption(description || title);
+    const isAuthenticatedFetch = hasInstagramAuth(auth);
 
     if (!title && !description) {
       return {
@@ -91,7 +109,7 @@ export async function extractInstagramPage(url, { auth = {}, fetchPage = default
       title,
       caption,
       description,
-      image
+      image: isAuthenticatedFetch ? "" : image
     };
   } catch (error) {
     return {
@@ -165,6 +183,61 @@ function sanitizeExtractionError(error) {
   return message || "Instagram extraction failed.";
 }
 
+function validatePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Invalid request payload.");
+  }
+  for (const [field, limit] of Object.entries(FIELD_LIMITS)) {
+    if (payload[field] === undefined) {
+      continue;
+    }
+    if (typeof payload[field] !== "string") {
+      throw new Error(`${field} must be text.`);
+    }
+    if (payload[field].length > limit) {
+      throw new Error(`${field} is too long.`);
+    }
+  }
+  if (payload.extractRemote !== undefined && typeof payload.extractRemote !== "boolean") {
+    throw new Error("extractRemote must be a boolean.");
+  }
+  return payload;
+}
+
+function isAllowedOrigin(event, options) {
+  if (options.skipOriginCheck) {
+    return true;
+  }
+  const origin = readHeader(event.headers, "origin");
+  if (!origin) {
+    return true;
+  }
+  const host = readHeader(event.headers, "x-forwarded-host") || readHeader(event.headers, "host");
+  const originHost = safeHost(origin);
+  return Boolean(host && originHost && originHost === host.toLowerCase());
+}
+
+function readHeader(headers = {}, name) {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name);
+  return entry?.[1] ?? "";
+}
+
+function safeHost(origin) {
+  try {
+    return new URL(origin).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function hasInstagramAuth({ sessionId = "", csrfToken = "", userId = "" } = {}) {
+  return Boolean(sessionId.trim() || csrfToken.trim() || userId.trim());
+}
+
+function byteLength(value) {
+  return new TextEncoder().encode(value).length;
+}
+
 function readMeta(html, property) {
   const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const metaPattern = new RegExp(`<meta\\s+[^>]*(?:property|name)\\s*=\\s*["']${escaped}["'][^>]*>`, "i");
@@ -203,7 +276,12 @@ function response(statusCode, body) {
   return {
     statusCode,
     headers: {
-      "content-type": "application/json; charset=utf-8"
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+      "permissions-policy": "camera=(), microphone=(), geolocation=()",
+      "referrer-policy": "no-referrer",
+      "vary": "Origin",
+      "x-content-type-options": "nosniff"
     },
     body: JSON.stringify(body)
   };

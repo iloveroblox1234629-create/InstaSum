@@ -78,6 +78,18 @@ describe("extractInstagramPage", () => {
     assert.match(observedHeaders.cookie, /ds_user_id=12345/);
     assert.equal(observedHeaders["x-csrftoken"], "csrf-token");
   });
+
+  it("does not return image URLs from authenticated Instagram fetches", async () => {
+    const page = await extractInstagramPage("https://www.instagram.com/reel/PRIVATE/", {
+      auth: {
+        sessionId: "session-token"
+      },
+      fetchPage: async () => sampleInstagramHtml
+    });
+
+    assert.equal(page.ok, true);
+    assert.equal(page.image, "");
+  });
 });
 
 describe("createInstagramHeaders", () => {
